@@ -49,6 +49,22 @@ köprüye ground truth eklenmez.
 | `localization_monitor.py` | map→odom adımları (sıçrama sayısı, maks Δxy/Δyaw) ve map→base_footprint ↔ gerçek konum hatası; Ctrl+C / `--duration` ile özet |
 | `dynamic_obstacle_test.py` | NavigateToPose A→B sırasında rotaya haritada olmayan 0.5 m kutu spawn eder (`/world/factory/create`); min. açıklık, yanal sapma, kutu yer değiştirmesi (çarpışma) ölçer, kutuyu siler |
 | `scan_alignment_check.py` | Her `/scan` noktasını gerçek poz × TF ile dünyaya yansıtıp SDF kutularına uzaklığı ölçer; aynısını +180° yanlış montaj varsayımıyla da yapar. Simetrik olmayan bir pozda çalıştırın (ör. `gz service -s /world/factory/set_pose ...`) |
+| `recovery_counter.py` | Nav2 kurtarma davranışlarını (spin/backup/drive_on_heading/wait/assisted_teleop) `_action/status` topic'lerinden benzersiz goal_id ile sayar; her çağrıda `KURTARMA:` uyarısı, Ctrl+C'de `KURTARMA ÖZETİ`. ClearCostmap (servis) sayılmaz. Devriye testinde `localization_monitor.py` ile birlikte çalıştırılır |
+| `gt_pose_publisher.py` | Gerçek konumu `/gt_pose` (`nav_msgs/Odometry`, sim zamanı) olarak yayınlar — **yalnızca rosbag kaydı için**, navigasyon kullanmaz |
+| `slam_replay_eval.py` | Bag oynatılırken SLAM `map→base_footprint` ↔ `/gt_pose` hatası (ort/p95/maks). SLAM parametrelerini Gazebo'suz, aynı veriyle karşılaştırmak için (akış betiğin docstring'inde) |
+| `generate_factory_world.py <çıktı.sdf>` | `worlds/factory.sdf` üreticisi (çıktı depodaki dosyayla bayt bayt aynı). Engel yerleşimi buradan değiştirilir; kalite/hizalama araçları geometriyi SDF'ten okur |
+
+### Örnek: devriye testi (Aşama 5 çıkış kriteri)
+```bash
+ros2 launch fsb_bringup bringup.launch.py headless:=true localization:=amcl
+# her biri ayrı terminalde (ön planda) — bitince Ctrl+C → SON ÖZET / KURTARMA ÖZETİ
+ros2 run fsb_gazebo localization_monitor.py --report 300 --ros-args -p use_sim_time:=true
+ros2 run fsb_gazebo recovery_counter.py --ros-args -p use_sim_time:=true
+ros2 launch fsb_patrol patrol.launch.py use_sim_time:=true loops:=10
+```
+Dikkat: `&` ile arka plana atılan süreçler betik içinde SIGINT'i yok sayar; `localization_monitor.py`
+o durumda `kill -INT` ile özet basmaz. Arka planda çalıştıracaksanız `--duration <sim-s>` verin
+(10 tur ≈ 1400 sim-s → ör. `--duration 1500`). `recovery_counter.py` kendi sinyal işleyicisini kurar, etkilenmez.
 
 ## Kurallar
 - Yalnızca `ros_gz_sim`, `ros_gz_bridge`, `gz_ros2_control`; Gazebo Classic yok.

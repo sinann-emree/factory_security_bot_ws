@@ -4,3 +4,5 @@ log/
 .backups/
 __pycache__/
 *.pyc
+# Harita kontrol görselleri (factory.png, factory_check.png ...) depoya girmez
+factory*.png

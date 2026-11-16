@@ -37,6 +37,10 @@ install(PROGRAMS
   scripts/amcl_check.py
   scripts/localization_monitor.py
   scripts/dynamic_obstacle_test.py
+  scripts/recovery_counter.py
+  scripts/gt_pose_publisher.py
+  scripts/slam_replay_eval.py
+  scripts/generate_factory_world.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
