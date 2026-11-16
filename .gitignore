@@ -6,3 +6,12 @@ __pycache__/
 *.pyc
 # Harita kontrol görselleri (factory.png, factory_check.png ...) depoya girmez
 factory*.png
+*.bag
+*.db3
+*.mcap
+*.pt
+*.onnx
+.venv/
+__pycache__/
+*.pyc
+factory*.png
