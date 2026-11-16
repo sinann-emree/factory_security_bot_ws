@@ -164,7 +164,7 @@ sudo apt install -y \
 Depoyu klonlayıp derleyin (`--symlink-install` **kullanılmaz**):
 
 ```bash
-git clone <depo-url> ~/factory_security_bot_ws
+git clone https://github.com/sinann-emree/factory_security_bot_ws.git ~/factory_security_bot_ws
 cd ~/factory_security_bot_ws
 source /opt/ros/jazzy/setup.bash
 rosdep install --from-paths src --ignore-src -y   # isteğe bağlı: eksik bağımlılıkları tamamlar
