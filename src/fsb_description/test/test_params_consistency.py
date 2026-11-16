@@ -47,8 +47,12 @@ def _xyz(elem: ET.Element) -> list:
 
 
 def _wheel_radius(urdf: ET.Element) -> float:
-    cyl = urdf.find("link[@name='left_wheel_link']/collision/geometry/cylinder")
-    return float(cyl.get('radius'))
+    vis = urdf.find("link[@name='left_wheel_link']/visual/geometry/cylinder")
+    col = urdf.find("link[@name='left_wheel_link']/collision/geometry/sphere")
+    assert vis is not None and col is not None
+    r = float(vis.get('radius'))
+    assert abs(float(col.get('radius')) - r) < TOL, 'çarpışma küresi != görsel yarıçap'
+    return r
 
 
 def test_wheel_radius_matches_controller(urdf, ddc):

@@ -1,0 +1,9 @@
+# gz_bridge.yaml — ros_gz_bridge parameter_bridge config_file (tasarım kuralı)
+# /clock YALNIZCA buradan köprülenir (tasarım kuralı).
+# Sensör köprüleri (/scan, /camera/*, /imu) Aşama 4'te eklenecek.
+
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS

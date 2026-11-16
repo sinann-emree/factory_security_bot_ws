@@ -103,9 +103,14 @@
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
         <material name="fsb_black"/>
       </visual>
+      <!-- Çarpışma: KÜRE (yarıçap = wheel_radius). Silindir-zemin temasında temas noktaları
+           25 mm genişlik boyunca kenarlara dağılıyor, etkin tekerlek ayrımı belirsizleşiyordu
+           (Aşama 3 testi: +360° komutta gerçek dönüş odom'dan %4-5.5 fazla). Küre tek noktadan,
+           tam y = ±wheel_separation/2'de temas eder → sim, diff_drive kinematiğiyle birebir.
+           Görsel silindir olarak kalır. -->
       <collision>
-        <origin xyz="0 0 0" rpy="${PI / 2} 0 0"/>
-        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><sphere radius="${wheel_radius}"/></geometry>
       </collision>
       <xacro:cylinder_y_inertial m="${wheel_mass}" r="${wheel_radius}" l="${wheel_width}"/>
     </link>
