@@ -1,0 +1,44 @@
+# patrol_planner / coverage_monitor robot ve sensör parametreleri.
+# Dünyadan BAĞIMSIZ: yalnızca robot + sensör + costmap özellikleri. Harita ayrıca verilir.
+# Kaynaklar:
+#   [N] fsb_navigation/config/nav2_params.yaml   [P] fsb_description/urdf/fsb_properties.xacro
+robot:
+  circumscribed_radius: 0.222   # m [N] footprint çevrel yarıçapı = hypot(0.204, 0.087)
+  inscribed_radius: 0.070       # m [N] footprint iç yarıçapı = min(0.070, 0.087)
+  safety_margin: 0.05           # m, proje seçimi: serbest alan şişirmesine eklenen pay
+  # → robot merkezi için gereken açıklık = 0.222 + 0.05 = 0.272 m (daha dar aralıklar elenir)
+
+sensors:
+  lidar_range_max: 12.0         # m [P] lidar_range_max (görüş menzili bunu aşamaz)
+  camera_hfov: 1.085            # rad [P] camera_hfov (62.2°)
+  camera_frame: camera_link     # coverage_monitor: TF'te kamera çerçevesi (gövde yönüyle aynı yaw)
+  # Algılama menzili (VARSAYIM, proje seçimi): 640x480, dikey FOV = 2·atan(tan(hfov/2)·480/640) = 48.7°.
+  # 1.7 m'lik insan 6 m'de ≈ 1.7 / (2·6·0.4525) · 480 ≈ 150 px boyunda → YOLOv8 için rahat.
+  # Raflarla kısmi örtülme ve hareket bulanıklığı için muhafazakâr tutuldu.
+  view_range: 6.0               # m
+  # Dar bölgeler (yerel genişlik < narrow_width): bu hücreler yalnızca narrow_view_range içinden
+  # görülürse "kapsanmış" sayılır. Not: 3–4 m denendi; iki ucu açık 4 m'lik raf aralarını ağızdan
+  # görmeye izin verdiği için aralara girmeyi GARANTİ ETMEDİ ve waypoint sayısını 30 → 47–64'e çıkardı.
+  # Aralara girmeyi planner.corridor_min_length kısıtı sağlar.
+  narrow_view_range: 6.0        # m, proje seçimi (= view_range: aralara girmeyi koridor kısıtı sağlıyor)
+  narrow_width: 2.2             # m, proje seçimi (tek şeritli koridor / raf arası ölçeği)
+
+costmap:                        # Nav2 InflationLayer eşdeğeri maliyet (waypoint doğrulaması için)
+  inflation_radius: 0.45        # m [N] global_costmap.inflation_layer
+  cost_scaling_factor: 4.0      # [N] global_costmap.inflation_layer
+  max_waypoint_cost: 60         # 0..252 ölçeğinde; waypoint bunu aşan hücreye konmaz (proje seçimi)
+
+planner:
+  target_coverage: 0.95         # greedy set cover hedefi (serbest alan oranı)
+  prune_length: 0.6             # m, bundan kısa iskelet dalları budanır
+  sample_step: 1.0              # m, iskelet boyunca ek aday aralığı (kavşak/uç düğümlere ek)
+  yaw_sectors: 12               # her adayda denenen yönelim sayısı (30°)
+  ray_step_deg: 0.5             # görüş ışını açısal adımı
+  universe_stride: 2            # kapsama evreni: her 2. hücre (0.1 m) — hız için
+  # m²: her yanı serbest alanla çevrili, HİÇ dolu hücre içermeyen bilinmeyen adacıklar (SLAM'de ışın
+  # düşmemiş yerler) bundan küçükse serbest sayılır. Engel olsaydı yüzeyi dolu olarak görülürdü; dolu
+  # duvarlı haritalanmamış oda bu tanıma girmez (bileşen dolu hücre içerir). factory haritasında
+  # kuzey-orta raf arasında 1.07 m²'lik böyle bir adacık var (0.05 m² eşikte raf arasını kapatıyordu).
+  speckle_area: 2.0
+  corridor_min_length: 2.0      # m, dar bölgedeki bu uzunluktan uzun iskelet parçaları "koridor": içine en az 1 waypoint zorunlu
+  hole_fill_area: 0.5           # m², yalnızca iskelet için: traversable'daki bundan küçük delikler doldurulur

@@ -52,6 +52,7 @@ köprüye ground truth eklenmez.
 | `recovery_counter.py` | Nav2 kurtarma davranışlarını (spin/backup/drive_on_heading/wait/assisted_teleop) `_action/status` topic'lerinden benzersiz goal_id ile sayar; her çağrıda `KURTARMA:` uyarısı, Ctrl+C'de `KURTARMA ÖZETİ`. ClearCostmap (servis) sayılmaz. Devriye testinde `localization_monitor.py` ile birlikte çalıştırılır |
 | `gt_pose_publisher.py` | Gerçek konumu `/gt_pose` (`nav_msgs/Odometry`, sim zamanı) olarak yayınlar — **yalnızca rosbag kaydı için**, navigasyon kullanmaz |
 | `slam_replay_eval.py` | Bag oynatılırken SLAM `map→base_footprint` ↔ `/gt_pose` hatası (ort/p95/maks). SLAM parametrelerini Gazebo'suz, aynı veriyle karşılaştırmak için (akış betiğin docstring'inde) |
+| `clearance_monitor.py [--duration 0]` | Gerçek poz + footprint (nav2_params) ile SDF kutularına en kısa mesafe (1 cm kenar örnekleri): min açıklık, çarpışma (≤ 0) örnek sayısı, < 2 cm süre, açıklık dağılımı; ayrıca engellerin itilip itilmediği. SIGINT/SIGTERM'de (arka planda da) `SONUÇ: ÇARPIŞMA YOK/VAR` |
 | `generate_factory_world.py <çıktı.sdf>` | `worlds/factory.sdf` üreticisi (çıktı depodaki dosyayla bayt bayt aynı). Engel yerleşimi buradan değiştirilir; kalite/hizalama araçları geometriyi SDF'ten okur |
 
 ### Örnek: devriye testi (Aşama 5 çıkış kriteri)

@@ -217,11 +217,28 @@ planner_server:
     expected_planner_frequency: 20.0
     costmap_update_timeout: 1.0
     planner_plugins: ["GridBased"]
+    # Aşama 5b: NavfnPlanner → SmacPlanner2D. Ölçüm (factory haritası, patrol_planner'ın 29
+    # waypoint'i, 810 yönlü çift, ComputePathToPose): NavFn Dijkstra 21/810 çiftte NO_VALID_PATH (208)
+    # ("Failed to create plan with tolerance"), NavFn A* 9/810, SmacPlanner2D 0/810; ort. yol
+    # 10.71 / 10.93 / 10.44 m, 17 / 17 / 14 ms. Başarısızlıklar kuzey raf aralarından başlayan uzun
+    # yollardaydı; idleness devriyesi uzak hedef seçebildiği için gerçek bir sorundu.
+    # Parametre adları kurulu sürümde `ros2 param list /planner_server` ile doğrulandı.
     GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.3
-      use_astar: false
-      allow_unknown: true
+      plugin: "nav2_smac_planner::SmacPlanner2D"
+      tolerance: 0.125                  # m, hedef doluysa kabul edilen yakınlık
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true               # NavFn ile aynı (bilinmeyen adacıklar geçilebilir)
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0            # s
+      cost_travel_multiplier: 2.0       # yüksek maliyetli (engele yakın) hücrelerden uzak dur
+      use_final_approach_orientation: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
 
 behavior_server:
   ros__parameters:

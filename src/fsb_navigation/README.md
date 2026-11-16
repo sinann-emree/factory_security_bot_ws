@@ -6,7 +6,7 @@
 
 ## Dizinler
 - `config/slam_toolbox_mapping.yaml` — online async haritalama (base_frame `base_footprint`, `/scan`)
-- `config/nav2_params.yaml` — AMCL, map_server, bt_navigator, controller (RegulatedPurePursuit), planner (NavFn),
+- `config/nav2_params.yaml` — AMCL, map_server, bt_navigator, controller (RegulatedPurePursuit), planner (SmacPlanner2D; Aşama 5b'de NavFn'den geçildi, gerekçe yaml'da),
   costmap'ler, behavior_server, waypoint_follower, velocity_smoother, collision_monitor
 - `maps/factory.yaml|pgm` — SLAM ile çıkarılmış harita (0.05 m/hücre)
 - `launch/slam.launch.py` — slam_toolbox (lifecycle) + lifecycle_manager

@@ -29,6 +29,10 @@ setup(
     entry_points={
         'console_scripts': [
             'patrol_node = fsb_patrol.patrol_node:main',
+            'patrol_planner = fsb_patrol.patrol_planner:main',
+            'patrol_executor = fsb_patrol.patrol_executor:main',
+            'coverage_monitor = fsb_patrol.coverage_monitor:main',
+            'map_variants = fsb_patrol.map_variants:main',
         ],
     },
 )

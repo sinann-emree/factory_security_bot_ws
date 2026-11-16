@@ -1,0 +1,12 @@
+# DÜNYAYA ÖZEL öncelikli devriye noktaları (yalnızca factory haritası için).
+# Genel waypoint'ler patrol_planner ile haritadan üretilir; bu dosya ise operatörün elle
+# belirlediği, daha sık ziyaret edilmesi gereken noktalardır. Koordinatlar 'map' çerçevesinde.
+# weight: idleness çarpanı (1 = sıradan waypoint; 2 = yaklaşık iki kat sık ziyaret).
+# Konum seçimi: fsb_gazebo/worlds/factory.sdf
+#   P_yukleme: doğu yükleme alanı, paletler (8.8, ±1.6) arasındaki boşluğun önü, paletlere bakar.
+priority_points:
+  - name: P_yukleme
+    x: 7.6
+    y: 0.0
+    yaw: 0.0
+    weight: 2.0

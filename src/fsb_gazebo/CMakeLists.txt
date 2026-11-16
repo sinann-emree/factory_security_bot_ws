@@ -41,6 +41,7 @@ install(PROGRAMS
   scripts/gt_pose_publisher.py
   scripts/slam_replay_eval.py
   scripts/generate_factory_world.py
+  scripts/clearance_monitor.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
