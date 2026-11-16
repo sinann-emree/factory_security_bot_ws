@@ -27,4 +27,9 @@ install(DIRECTORY config launch
   DESTINATION share/${PROJECT_NAME}
   PATTERN ".gitkeep" EXCLUDE)
 
+# Robot tarafı güvenlik düğümü: ros2 run fsb_control cmd_vel_watchdog.py
+install(PROGRAMS
+  scripts/cmd_vel_watchdog.py
+  DESTINATION lib/${PROJECT_NAME})
+
 ament_package()

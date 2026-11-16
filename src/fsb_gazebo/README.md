@@ -19,6 +19,14 @@
   Walking person 0.88–0.95 (11/11 poz ≥ 0.8) · Casual female 0.80–0.93 (10/11) ·
   Standing person 0.70–0.92 (7/11; yakında baş kadraj dışı, yandan zayıf) ·
   Rescue Randy 0.00–0.93 (8/11; 2 m'de tespit yok) · Male visitor (actor) statik yerleştirilemiyor.
+- `worlds/factory_lying.sdf` — `factory.sdf` + **yerde yatan insan** (`lying_person`, statik):
+  Fuel **Casual female**, sırtüstü, gövde ortası (−5.0, 0.8), baş yönü 0.4 rad (batı ana koridor).
+  Fuel'daki hazır "yatan" modeller (hasta modelleri) ~1 m yüksek hastane yatağıyla birlikte geldiği
+  için kullanılmadı; ayakta modeller döndürülerek yatırılır (sırtüstü / yüzüstü / yan). Dünyada
+  ayakta ya da yürüyen insan yoktur.
+- `worlds/factory_negative.sdf` — **yalnızca yanlış alarm ölçümü için**: ayakta insan
+  (`intruder_person`, Walking person, (9.2, 0)) + 0.5 m küp (`neg_box`, (4.0, 1.6)). Yatan insan yok;
+  beklenen alarm sayısı 0.
 - `models/` — (boş) harici modeller için
 - `config/gz_bridge.yaml` — `/clock`, `/scan`, `/camera/image_raw`, `/camera/camera_info`, `/imu` (hepsi GZ→ROS)
 - `scripts/` — test araçları (aşağıda)
@@ -63,8 +71,9 @@ köprüye ground truth eklenmez.
 | `gt_pose_publisher.py` | Gerçek konumu `/gt_pose` (`nav_msgs/Odometry`, sim zamanı) olarak yayınlar — **yalnızca rosbag kaydı için**, navigasyon kullanmaz |
 | `slam_replay_eval.py` | Bag oynatılırken SLAM `map→base_footprint` ↔ `/gt_pose` hatası (ort/p95/maks). SLAM parametrelerini Gazebo'suz, aynı veriyle karşılaştırmak için (akış betiğin docstring'inde) |
 | `clearance_monitor.py [--duration 0]` | Gerçek poz + footprint (nav2_params) ile SDF kutularına en kısa mesafe (1 cm kenar örnekleri): min açıklık, çarpışma (≤ 0) örnek sayısı, < 2 cm süre, açıklık dağılımı; ayrıca engellerin itilip itilmediği. SIGINT/SIGTERM'de (arka planda da) `SONUÇ: ÇARPIŞMA YOK/VAR` |
-| `generate_factory_world.py <çıktı.sdf> [--person walking --person-pose X Y YAW]` | `worlds/factory.sdf` üreticisi (çıktı depodaki dosyayla bayt bayt aynı). Engel yerleşimi buradan değiştirilir; kalite/hizalama araçları geometriyi SDF'ten okur. `--person` ile Fuel insan modeli eklenir (`factory_person.sdf`; seçenekler `walking`, `standing`, `casual_female`, `rescue_randy`; YAW = yüzün baktığı yön) |
+| `generate_factory_world.py <çıktı.sdf> [--person walking --person-pose X Y YAW]` | `worlds/factory.sdf` üreticisi (çıktı depodaki dosyayla bayt bayt aynı). Engel yerleşimi buradan değiştirilir; kalite/hizalama araçları geometriyi SDF'ten okur. `--person` ile ayakta Fuel insan modeli eklenir (`factory_person.sdf`; seçenekler `walking`, `standing`, `casual_female`, `rescue_randy`; YAW = yüzün baktığı yön). `--lying MODEL --lying-pose X Y BAŞ_YÖNÜ --lying-type supine\|prone\|side` yerde yatan insan (`factory_lying.sdf`; X Y = gövde ortası), `--lying-at MODEL TİP X Y BAŞ_YÖNÜ` (yinelenebilir) ek yatan insanlar, `--box X Y` 0.5 m küp (`factory_negative.sdf`) |
 | `perf_monitor.py --duration 240 [--json f]` | RTF (`/clock` ÷ duvar saati) ve süreç gruplarına göre CPU (gazebo, nav2, yolo, ekf, bridge, patrol; %100 = 1 çekirdek), varsa GPU (nvidia-smi). Algı açık/kapalı karşılaştırması için |
+| `posture_monitor.py [--duration sim-s] [--json f]` | `/perception/posture` üzerinden duruşa göre kare sayıları (lying / upright / unknown), "yatan" kararını veren ipucu, `/security/alerts` sayısı. Negatif dünyada lying kare ve alarm sayısı = yanlış alarm ölçüsü |
 | `alert_response_monitor.py [--duration sim-s] [--json f]` | `/perception/detections` güven dağılımı (≥ 0.8 kare oranı), `/security/alerts` sayısı, her ele alınan alarmda `/odometry/filtered`'dan durma gecikmesi, durma süresi, yeniden hareket |
 
 ### Örnek: devriye testi (Aşama 5 çıkış kriteri)

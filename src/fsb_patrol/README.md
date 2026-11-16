@@ -1,7 +1,7 @@
 # fsb_patrol
 
 **Amaç:** Haritadan otomatik üretilen, dünyadan bağımsız, tam kapsamlı devriye.
-(Aşama 6: `/security/alerts` olaylarına tepki — dur, uyar, kaydet.)
+(Aşama 6b: yerde yatan insan için olay listesi — konumla, kaydet, revisit, çözüldü.)
 
 **Durum:** Aşama 5b — `patrol_planner` + `patrol_executor` + `coverage_monitor`. Eski 4 noktalı
 `patrol_node` / `config/patrol.yaml` yedek (fallback) olarak duruyor (aşağıda).
@@ -63,30 +63,62 @@ olmaz. RViz için `/patrol/waypoints` (`visualization_msgs/MarkerArray`, transie
 her hedef için yön oku + etiket; turuncu = şu anki hedef, yeşil = bu turda ziyaret, kırmızı = atlandı,
 mavi = bekliyor, mor = bekleyen öncelikli nokta (`fsb_bringup/rviz/nav.rviz`'de hazır). Her tur sonunda `Tur k TAMAM (sim/duvar)` özeti, en sonda `DEVRİYE BİTTİ`.
 
-### Güvenlik alarmına tepki (`/security/alerts`)
-`fsb_perception` `yolo_node` bir insanı ≥ %80 güvenle art arda 3 karede görünce
-`/security/alerts` (`vision_msgs/Detection2D`) yayınlar. `patrol_executor`:
-1. **Dur** — etkin Nav2 hedefini iptal eder (robot durur), hedefi hatırlar.
-2. **Uyar** — `!!! GÜVENLİK ALARMI #n ...` WARN logu; RViz'de robotun konumunda kırmızı küre +
-   `ALARM #n person 0.93` etiketi (`/patrol/waypoints`, `alert` ad alanı).
-3. **Kaydet** — `alert_log_dir/events.jsonl`'a bir satır (duvar/sim zamanı, sınıf, güven, kutu, robotun
-   `map` pozu, tur, hedef, iptal gecikmesi, devam zamanı) ve alarm anındaki işaretli kamera karesi
-   (`alarm_<zaman>_<n>.jpg`, `/perception/image_annotated`'tan).
-4. **Devam** — `alert_hold` sim-s sonra aynı hedefi yeniden gönderir; tur kaldığı yerden sürer
-   (hedef atlanmış sayılmaz, olay süresi hedef zaman aşımına yazılmaz).
+### Yatan insan: olay listesi (watchlist), kayıt ve revisit
+Alarm **yalnızca yerde yatan insan** içindir (ayakta/yürüyen insan ve hareketli nesne kapsam dışı).
+`fsb_perception` `yolo_node` yatan insanı son N çıkarımın M'sinde görünce `/security/alerts`
+(`vision_msgs/Detection2D`) yayınlar. `patrol_executor` (kod: `incident_manager.py`,
+`incident_geometry.py`, `watchlist.py`):
 
-Olay bittikten sonra `alert_cooldown` sim-s boyunca yeni alarmlar yok sayılır (aynı kişi için sürekli
-durmasın); sayıları `DEVRİYE BİTTİ` özetinde `alarm n (yok sayılan m)` olarak görünür.
+1. **Konum** — kişinin `map` konumu hesaplanır: tespit kutusunun yatay açı aralığına düşen LiDAR
+   ışınlarından en yakın küme (`method: lidar`). LiDAR ışını yoksa kutunun alt kenarından zemin
+   düzlemi ışını (`method: ground`; kamera yere çok yakın olduğu için kaba, yalnızca yedek).
+2. **Birleştir** — konum etkin bir kaydın `merge_radius` (1 m) içindeyse aynı kişidir: yeni kayıt
+   açılmaz, bildirim yinelenmez, devriye durmaz (yalnızca `last_seen` güncellenir). Böylece listedeki
+   kişi sıradan devriye sırasında her görüldüğünde yeniden alarm üretmez.
+3. **Ekle + bildir (bir kez)** — yeni kişi listeye eklenir, `!!! YATAN İNSAN #n` WARN logu, RViz'de
+   kırmızı küre + `YATAN #n (doğrulama k)` etiketi (`/patrol/waypoints`, `alert` ad alanı).
+4. **Kayıt görevi** — etkin devriye hedefi iptal edilir; kişinin çevresinde `inspect_radius`
+   uzaklıkta, birbirinden ≥ 50° ayrık `inspect_views` bakış noktası global costmap'ten seçilir
+   (maliyeti düşük ve LiDAR'a göre kişiye görüş hattı açık hücreler), her birinde `observe_time`
+   boyunca kare sayılır, işaretli kamera karesi (`wl<id>_inspect<k>_<zaman>.jpg`) ve duruş kaydı
+   (kutu, güven, gövde açısı, anahtar noktalar) saklanır. Kayıt sırasında toplanan konumların
+   medyanıyla kişinin konumu inceltilir. Ulaşılamayan bakış noktası atlanır, sıradaki denenir.
+5. **Devam** — devriye kaldığı hedeften sürer (hedef atlanmış sayılmaz).
+6. **Revisit** — `revisit_interval` sim-s sonra (bir sonraki hedef arasında) konumu gören bir bakış
+   noktasına gidilir:
+   - **hâlâ yerde** (≥ `observe_min_hits` karede konumun yakınında yatan insan) → bildirim yenilenir
+     (`!!! YATAN İNSAN #n HÂLÂ YERDE`), `confirmations` ve `notifications` artar, yeni revisit kurulur;
+   - **yok** → kayıt **yalnızca** şu üçü birden doğrulanırsa listeden çıkarılır ve `ÇÖZÜLDÜ` loglanır:
+     konum kamera görüş alanında ve `view_max_range` içinde, LiDAR'a göre görüş hattı açık (araya
+     engel girmemiş), konumda LiDAR dönüşü yok (zemin boş);
+   - **doğrulanamadı** (bakış noktasına ulaşılamadı, konum FOV dışında, araya engel girdi ya da
+     konumda hâlâ bir şey var ama yatan insan olarak tanınmadı) → kayıt **silinmez**; sıradaki bakış
+     noktası denenir, hepsi tükenirse `revisit_retry` sim-s sonra yeniden denenir.
+
+**Dosyalar** (`alert_log_dir`): `watchlist.yaml` (güncel liste; her değişiklikte atomik yazılır,
+yeniden başlatmada etkin kayıtlar yüklenir), `events.jsonl` (`added`, `observation`, `revisit`,
+`resolved` ... olayları: sim/duvar zamanı, bakış noktası, robot pozu, kare/isabet sayıları, görüş
+doğrulaması), `wl<id>_*.jpg`.
+Kayıt alanları: `id`, `x`, `y` (map), `status` (`active`/`resolved`), `first_seen_wall`,
+`first_seen_sim`, `last_seen_sim`, `confirmations`, `notifications`, `images`, `observations`,
+`revisits`, `next_revisit_sim`, `resolved_wall`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
 | `react_to_alerts` | `true` | `false` → alarmlar dinlenmez |
 | `alert_topic` | `/security/alerts` | |
-| `alert_hold` | `5.0` | sim-s, alarmda bekleme (launch argümanı da var) |
-| `alert_cooldown` | `120.0` | sim-s, olay sonrası yok sayma süresi (launch argümanı da var) |
 | `alert_max_age` | `2.0` | sim-s; bundan eski kareye ait (kuyrukta beklemiş) alarm yok sayılır |
-| `alert_log_dir` | `~/.ros/fsb_security` | `events.jsonl` + kareler |
+| `alert_log_dir` | `~/.ros/fsb_security` | watchlist + olay günlüğü + kareler (launch argümanı da var) |
 | `alert_image_topic` | `/perception/image_annotated` | `''` → kare kaydedilmez |
+| `merge_radius` | `1.0` | m; aynı kişi sayma yarıçapı (launch argümanı da var) |
+| `inspect_radius` | `2.0` | m; bakış noktalarının kişiye uzaklığı |
+| `inspect_views` | `3` | kayıtta farklı açı sayısı (launch argümanı da var) |
+| `observe_time` / `observe_settle` | `4.0` / `1.0` | sim-s; bakış noktasında sayım süresi / öncesinde bekleme |
+| `observe_min_hits` | `3` | "görüldü / hâlâ yerde" için gereken yatan-insan karesi |
+| `revisit_interval` | `300.0` | sim-s; kayıt ya da doğrulamadan sonraki revisit (launch argümanı da var) |
+| `revisit_retry` | `60.0` | sim-s; görüş doğrulanamayınca yeniden deneme |
+| `view_max_range` | `4.0` | m; "çözüldü" doğrulaması için kamera–konum üst uzaklığı |
+| `scan_topic`, `camera_info_topic`, `costmap_topic`, `camera_frame`, `lidar_frame` | bkz. `incident_manager.py` | konum hesabı ve bakış noktası seçimi girdileri |
 
 ## 3. `coverage_monitor` — gerçek yoldan kapsama
 TF `map→camera_link` pozlarından planlayıcıyla AYNI görüş modeliyle (FOV + menzil + ışın izleme)

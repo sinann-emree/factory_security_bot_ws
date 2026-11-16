@@ -11,9 +11,12 @@ Kullanım:
       # GUI'li Gazebo + RViz (nav.rviz) + AMCL/Nav2 + patrol_executor (idleness), tek komut
       # patrol_mode:=sequential|random|legacy (legacy = eski 4 noktalı patrol_node)
   ros2 launch fsb_bringup bringup.launch.py localization:=amcl patrol:=true perception:=true \
-      world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_person.sdf
-      # + YOLOv8 (fsb_perception, ~/fsb_venv) ve insan modelli dünya: tespit → /security/alerts
-      # → patrol_executor durur, uyarır, kaydeder, devam eder
+      world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_lying.sdf
+      # + YOLOv8-pose (fsb_perception, ~/fsb_venv) ve yerde yatan insanlı dünya: yatan insan →
+      # /security/alerts → patrol_executor olay listesine ekler, çevresinden kayıt alır,
+      # devriyeye devam eder, revisit_interval sonra konumu yeniden denetler
+      # image_transport:=compressed → YOLO sıkıştırılmış görüntüden çalışır (sunucu düzeni)
+      # cmd_vel_watchdog:=true → /cmd_vel → cmd_vel_watchdog → /cmd_vel_safe → diff_drive
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
@@ -23,7 +26,8 @@ use_sim_time = use_sim (proje tasarım kuralı: use_sim_time tek noktadan, launc
 yönetilir).
 TF: odom→base_footprint yalnızca EKF (diff_drive enable_odom_tf: false).
     map→odom yalnızca SLAM Toolbox (localization:=slam) VEYA AMCL (localization:=amcl), asla ikisi.
-cmd_vel: diff_drive_controller ~/cmd_vel → /cmd_vel (Nav2 collision_monitor çıkışı, teleop).
+cmd_vel: diff_drive_controller ~/cmd_vel → /cmd_vel (Nav2 collision_monitor çıkışı, teleop);
+         cmd_vel_watchdog:=true iken araya 0.5 s'lik komut bekçisi girer (→ /cmd_vel_safe).
 """
 
 from launch import LaunchDescription
@@ -67,6 +71,19 @@ def generate_launch_description() -> LaunchDescription:
         condition=UnlessCondition(use_sim),
     )
 
+    watchdog_on = LaunchConfiguration('cmd_vel_watchdog')
+    drive_cmd_topic = PythonExpression(
+        ["'/cmd_vel_safe' if '", watchdog_on, "'.lower() == 'true' else '/cmd_vel'"])
+    cmd_vel_watchdog = Node(
+        package='fsb_control',
+        executable='cmd_vel_watchdog.py',
+        name='cmd_vel_watchdog',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time, 'timeout': 0.5}],
+        remappings=[('cmd_vel_in', '/cmd_vel'), ('cmd_vel_out', '/cmd_vel_safe')],
+        condition=IfCondition(watchdog_on),
+    )
+
     # controller_manager (sim: gz_ros2_control eklentisi, robot spawn edilince) hazır olana dek
     # spawner servis bekler — sabit TimerAction gecikmesine bağımlı değil.
     jsb_spawner = Node(
@@ -88,8 +105,10 @@ def generate_launch_description() -> LaunchDescription:
                    '--controller-manager', '/controller_manager',
                    '--controller-manager-timeout', '120',
                    '--param-file', controllers_yaml,
-                   # Nav2 collision_monitor çıkışı /cmd_vel → diff_drive (TwistStamped)
-                   '--controller-ros-args', '-r /diff_drive_controller/cmd_vel:=/cmd_vel'],
+                   # Nav2 collision_monitor çıkışı /cmd_vel → diff_drive (TwistStamped);
+                   # bekçi açıksa diff_drive bekçinin çıkışını (/cmd_vel_safe) dinler
+                   '--controller-ros-args',
+                   ['-r /diff_drive_controller/cmd_vel:=', drive_cmd_topic]],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen',
     )
@@ -121,8 +140,17 @@ def generate_launch_description() -> LaunchDescription:
         PythonLaunchDescriptionSource(PathJoinSubstitution(
             [FindPackageShare('fsb_perception'), 'launch', 'perception.launch.py'])),
         launch_arguments={'use_sim_time': use_sim_time,
-                          'device': LaunchConfiguration('yolo_device')}.items(),
+                          'device': LaunchConfiguration('yolo_device'),
+                          'image_transport': LaunchConfiguration('image_transport')}.items(),
         condition=IfCondition(LaunchConfiguration('perception')),
+    )
+    # Sıkıştırılmış görüntü yolu (sunucu düzeni): ham → <topic>/compressed (robot tarafı)
+    image_compress = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution(
+            [FindPackageShare('fsb_perception'), 'launch', 'image_compress.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
+        condition=IfCondition(EqualsSubstitution(LaunchConfiguration('image_transport'),
+                                                 'compressed')),
     )
 
     rviz = Node(
@@ -149,7 +177,9 @@ def generate_launch_description() -> LaunchDescription:
                           'mode': LaunchConfiguration('patrol_mode'),
                           'loops': LaunchConfiguration('loops'),
                           'coverage': LaunchConfiguration('coverage'),
-                          'map': LaunchConfiguration('map')}.items(),
+                          'map': LaunchConfiguration('map'),
+                          'revisit_interval': LaunchConfiguration('revisit_interval'),
+                          'alert_log_dir': LaunchConfiguration('security_log_dir')}.items(),
         condition=patrol_cond(legacy=False),
     )
     patrol_legacy = IncludeLaunchDescription(
@@ -214,6 +244,20 @@ def generate_launch_description() -> LaunchDescription:
             'perception', default_value='false',
             description='true: YOLOv8 algı düğümü (fsb_perception; ~/fsb_venv gerekli)'),
         DeclareLaunchArgument(
+            'image_transport', default_value='raw', choices=['raw', 'compressed'],
+            description='compressed: kamera görüntüsü JPEG olarak da yayınlanır ve YOLO onu '
+                        'dinler (YOLO başka makinede çalışacaksa)'),
+        DeclareLaunchArgument(
+            'cmd_vel_watchdog', default_value='false',
+            description='true: /cmd_vel → cmd_vel_watchdog (0.5 s komut gelmezse dur) → '
+                        'diff_drive'),
+        DeclareLaunchArgument(
+            'revisit_interval', default_value='300.0',
+            description='yatan insan kaydından sonra revisit süresi (sim-s)'),
+        DeclareLaunchArgument(
+            'security_log_dir', default_value='~/.ros/fsb_security',
+            description='olay listesi (watchlist.yaml), events.jsonl ve kareler'),
+        DeclareLaunchArgument(
             'yolo_device', default_value='',
             description="YOLO cihazı: '' = CUDA varsa cuda:0, yoksa cpu | cpu | cuda:0"),
 
@@ -226,6 +270,8 @@ def generate_launch_description() -> LaunchDescription:
         RegisterEventHandler(OnProcessExit(target_action=ddc_spawner, on_exit=[ekf])),
         slam,
         nav2,
+        cmd_vel_watchdog,
+        image_compress,
         perception,
         rviz,
         patrol,

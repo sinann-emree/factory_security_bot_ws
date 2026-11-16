@@ -4,7 +4,8 @@ Kapsamlı devriye: patrol_executor (+ isteğe bağlı coverage_monitor).
 Nav2 çalışırken (bringup localization:=amcl):
   ros2 launch fsb_patrol patrol_executor.launch.py use_sim_time:=true [mode:=idleness] [loops:=5]
       [waypoints_file:=...] [priority_file:=...] [coverage:=true]
-      [alert_hold:=5.0] [alert_cooldown:=120.0]   # /security/alerts tepkisi (sim-s)
+      [revisit_interval:=300.0] [inspect_views:=3] [merge_radius:=1.0]
+      [alert_log_dir:=~/.ros/fsb_security]   # yatan insan olay listesi (incident_manager.py)
 Varsayılan waypoint dosyası: config/waypoints_factory.yaml (patrol_planner çıktısı).
 Eski 4 noktalı rota (fallback): ros2 launch fsb_patrol patrol.launch.py
 """
@@ -37,10 +38,14 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('map', default_value=PathJoinSubstitution(
             [FindPackageShare('fsb_navigation'), 'maps', 'factory.yaml'])),
         DeclareLaunchArgument('coverage_png', default_value=''),
-        DeclareLaunchArgument('alert_hold', default_value='5.0',
-                              description='alarmda bekleme süresi (sim-s)'),
-        DeclareLaunchArgument('alert_cooldown', default_value='120.0',
-                              description='olay sonrası alarmların yok sayıldığı süre (sim-s)'),
+        DeclareLaunchArgument('revisit_interval', default_value='300.0',
+                              description='yatan insan kaydından sonra revisit süresi (sim-s)'),
+        DeclareLaunchArgument('inspect_views', default_value='3',
+                              description='kayıt için farklı açı sayısı'),
+        DeclareLaunchArgument('merge_radius', default_value='1.0',
+                              description='aynı kişi sayılan tespitlerin yarıçapı (m)'),
+        DeclareLaunchArgument('alert_log_dir', default_value='~/.ros/fsb_security',
+                              description='watchlist.yaml, events.jsonl ve kareler'),
         Node(package='fsb_patrol', executable='patrol_executor', name='fsb_patrol_executor',
              output='screen',
              parameters=[{'use_sim_time': ust,
@@ -48,10 +53,13 @@ def generate_launch_description() -> LaunchDescription:
                           'loops': ParameterValue(LaunchConfiguration('loops'), value_type=int),
                           'waypoints_file': LaunchConfiguration('waypoints_file'),
                           'priority_file': LaunchConfiguration('priority_file'),
-                          'alert_hold': ParameterValue(LaunchConfiguration('alert_hold'),
-                                                       value_type=float),
-                          'alert_cooldown': ParameterValue(
-                              LaunchConfiguration('alert_cooldown'), value_type=float)}]),
+                          'revisit_interval': ParameterValue(
+                              LaunchConfiguration('revisit_interval'), value_type=float),
+                          'inspect_views': ParameterValue(
+                              LaunchConfiguration('inspect_views'), value_type=int),
+                          'merge_radius': ParameterValue(
+                              LaunchConfiguration('merge_radius'), value_type=float),
+                          'alert_log_dir': LaunchConfiguration('alert_log_dir')}]),
         Node(package='fsb_patrol', executable='coverage_monitor', name='fsb_coverage_monitor',
              output='screen', condition=IfCondition(LaunchConfiguration('coverage')),
              parameters=[{'use_sim_time': ust,

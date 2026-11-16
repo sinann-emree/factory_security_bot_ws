@@ -6,15 +6,21 @@ Engel yerleşimi (raf/kolon/palet/duvar) değiştirilecekse SDF'i elle değil bu
 map_quality_check.py ve scan_alignment_check.py referans geometriyi SDF kutularından okur.
 Çıktı, Aşama 4 sonrası depodaki factory.sdf ile bayt bayt aynıdır.
 
-İnsan modeli (YOLO hedefi): --person ile Gazebo Fuel'dan bir model <include> edilir (statik).
-Model dosyaları depoda tutulmaz; Gazebo ilk açılışta indirip ~/.gz/fuel altında önbelleğe alır
-(ilk açılışta internet gerekir). --person verilmezse çıktı factory.sdf ile bayt bayt aynıdır.
+İnsan modelleri Gazebo Fuel'dan <include> edilir (statik). Model dosyaları depoda tutulmaz;
+Gazebo ilk açılışta indirip ~/.gz/fuel altında önbelleğe alır (ilk açılışta internet gerekir).
+  --lying   YERDE YATAN insan (alarm hedefi). Fuel'da yerde yatan hazır model yok (hasta modelleri
+            yatak üzerinde); ayakta modeller yatık pozla yerleştirilir (sırtüstü/yüzüstü/yan).
+  --person  AYAKTA insan — yalnızca negatif test dünyası için (alarm üretmemeli).
+  --box     0.5 m küp — negatif test (alarm üretmemeli).
+Hiçbiri verilmezse çıktı factory.sdf ile bayt bayt aynıdır.
 
 Kullanım:
   ros2 run fsb_gazebo generate_factory_world.py <çıktı.sdf>
   # ör. src/fsb_gazebo/worlds/factory.sdf (değiştirmeden önce yedek alın), sonra paketi derleyin
+  ros2 run fsb_gazebo generate_factory_world.py <çıktı.sdf> --lying casual_female \
+      --lying-pose -5.0 0.8 0.4 --lying-type supine   # worlds/factory_lying.sdf
   ros2 run fsb_gazebo generate_factory_world.py <çıktı.sdf> --person walking \
-      --person-pose 9.2 0.0 3.14159265   # worlds/factory_person.sdf böyle üretildi
+      --person-pose 9.2 0.0 3.14159265 --box 4.0 1.6  # worlds/factory_negative.sdf
 """
 
 import argparse
@@ -94,6 +100,33 @@ def person(kind: str, x: float, y: float, yaw: float) -> str:
     </include>"""
 
 
+# Yatış türü → (roll, pitch, baş yönüne eklenen yaw, zemin üstü kaldırma m). Modeller ayakta
+# +z boyunca durur ve -y'ye bakar; köken ayak tabanındadır.
+LIE: Dict[str, Tuple[float, float, float, float]] = {
+    'supine': (-math.pi / 2, 0.0, -math.pi / 2, 0.13),   # sırtüstü
+    'prone': (math.pi / 2, 0.0, math.pi / 2, 0.16),      # yüzüstü
+    'side': (0.0, math.pi / 2, 0.0, 0.24),               # yan
+}
+LYING_NAME = 'lying_person'
+BODY_LENGTH = 1.7
+
+
+def lying_person(kind: str, cx: float, cy: float, heading: float, lie: str,
+                 name: str = LYING_NAME) -> str:
+    """Yerde yatan insan; (cx, cy) gövde ortası, heading = başın baktığı yön (rad)."""
+    uri, _ = PERSONS[kind]
+    roll, pitch, dyaw, z = LIE[lie]
+    x = cx - 0.5 * BODY_LENGTH * math.cos(heading)   # ayak tabanı (model kökeni)
+    y = cy - 0.5 * BODY_LENGTH * math.sin(heading)
+    return f"""
+    <include>
+      <name>{name}</name>
+      <static>true</static>
+      <pose>{x:.4f} {y:.4f} {z} {roll:.6f} {pitch:.6f} {heading + dyaw:.6f}</pose>
+      <uri>{uri}</uri>
+    </include>"""
+
+
 def world_sdf(extra: str = '') -> str:
     return f"""<?xml version="1.0"?>
 <!--
@@ -160,8 +193,26 @@ def main() -> int:
     ap.add_argument('--person', choices=sorted(PERSONS), help='eklenecek Fuel insan modeli')
     ap.add_argument('--person-pose', nargs=3, type=float, default=[9.2, 0.0, 3.14159265],
                     metavar=('X', 'Y', 'YAW'), help='konum (m) ve yüzün baktığı yön (rad)')
+    ap.add_argument('--lying', choices=sorted(PERSONS), help='yerde yatan Fuel insan modeli')
+    ap.add_argument('--lying-pose', nargs=3, type=float, default=[-5.0, 0.8, 0.4],
+                    metavar=('X', 'Y', 'HEADING'), help='gövde ortası (m) ve baş yönü (rad)')
+    ap.add_argument('--lying-type', choices=sorted(LIE), default='supine')
+    ap.add_argument('--lying-at', nargs=5, action='append', default=[],
+                    metavar=('MODEL', 'TYPE', 'X', 'Y', 'HEADING'),
+                    help='ek yatan insan (yinelenebilir); adları lying_person_2, _3, ...')
+    ap.add_argument('--box', nargs=2, type=float, metavar=('X', 'Y'),
+                    help='0.5 m küp (negatif test)')
     args = ap.parse_args()
     extra = person(args.person, *args.person_pose) if args.person else ''
+    if args.lying:
+        extra += lying_person(args.lying, *args.lying_pose, args.lying_type)
+    for k, (kind, lie, x, y, heading) in enumerate(args.lying_at, start=2):
+        if kind not in PERSONS or lie not in LIE:
+            ap.error(f'--lying-at: bilinmeyen model/tip: {kind} {lie}')
+        extra += lying_person(kind, float(x), float(y), float(heading), lie,
+                              f'{LYING_NAME}_{k}')
+    if args.box:
+        extra += box('neg_box', args.box[0], args.box[1], 0.25, 0.5, 0.5, 0.5, PALLET)
     with open(args.output, 'w', encoding='utf-8') as f:
         f.write(world_sdf(extra))
     return 0

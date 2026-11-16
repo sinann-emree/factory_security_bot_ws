@@ -1,16 +1,24 @@
 # fsb_yolo_node parametreleri (ayrıntı: fsb_perception/yolo_node.py başlığı).
-# model_path ve device perception.launch.py argümanlarıyla da verilebilir (argüman bu dosyayı ezer).
+# model_path, device ve image_transport perception.launch.py argümanlarıyla da verilir
+# (argüman bu dosyayı ezer).
 fsb_yolo_node:
   ros__parameters:
-    model_path: "~/yolov8n.pt"
-    confidence: 0.5            # yayınlanan tespitler için alt eşik
+    model_path: "~/yolov8n-pose.pt"
+    confidence: 0.35           # yayınlanan tespitler için alt eşik
     device: ""                 # "" = CUDA varsa cuda:0, yoksa cpu
     target_classes: ["person"]
     rate: 5.0                  # Hz
     imgsz: 640
     cpu_threads: 2             # yalnızca device=cpu
     image_topic: "/camera/image_raw"
-    alert_classes: ["person"]
-    alert_confidence: 0.8      # alarm eşiği (çıkış kriteri: hedef ≥ %80 güven)
-    alert_min_frames: 3        # art arda bu kadar çıkarımda eşik üstü → alarm
-    alert_period: 2.0          # s; hedef görünür kaldıkça alarm yineleme aralığı
+    image_transport: "raw"     # raw | compressed (<image_topic>/compressed)
+    # Duruş eşikleri (fsb_perception/posture.py; simülasyon ölçümünden)
+    torso_lying_deg: 45.0      # gövde ekseni düşeyden bu kadar yatıksa "yatan"
+    torso_upright_deg: 30.0    # bu kadar dikse (ve kutu oranı küçükse) "ayakta"
+    aspect_lying: 1.5          # kutu genişlik/yükseklik: anahtar noktalar zayıfken yedek yol
+    kp_conf: 0.5               # omuz/kalça anahtar noktası alt güveni
+    # Alarm: yalnızca yatan insan; son N çıkarımın M'sinde
+    alert_confidence: 0.35
+    alert_window: 10           # N
+    alert_min_hits: 4          # M
+    alert_period: 2.0          # s; koşul sürdükçe yineleme aralığı

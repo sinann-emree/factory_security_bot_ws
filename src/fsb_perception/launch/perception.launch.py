@@ -2,7 +2,12 @@
 YOLOv8 algı düğümü (fsb_yolo_node).
 
   ros2 launch fsb_perception perception.launch.py use_sim_time:=true [device:=cpu|cuda:0]
-      [model_path:=~/yolov8n.pt] [venv:=~/fsb_venv] [params_file:=...]
+      [model_path:=~/yolov8n-pose.pt] [venv:=~/fsb_venv] [params_file:=...]
+      [image_transport:=raw|compressed] [image_topic:=/camera/image_raw]
+
+Başka makinede (sunucu) çalıştırma: bu launch dosyası yalnızca YOLO düğümünü başlatır; TF, tarama
+ya da robot sürücüsü gerektirmez. Sunucuda `image_transport:=compressed` verin; robot tarafında
+`image_compress.launch.py` ham görüntüyü <image_topic>/compressed olarak yayınlar.
 
 Python ortamı: düğüm `venv` içindeki yorumlayıcıyla ve PYTHONNOUSERSITE=1 ile çalıştırılır.
   - ultralytics/torch yalnızca venv'de kuruludur (opencv-python OLMADAN).
@@ -35,7 +40,11 @@ def generate_launch_description() -> LaunchDescription:
             [FindPackageShare('fsb_perception'), 'config', 'yolo.yaml'])),
         DeclareLaunchArgument('omp_threads', default_value='2',
                               description='YOLO sürecinin OpenMP iş parçacığı üst sınırı'),
-        DeclareLaunchArgument('model_path', default_value='~/yolov8n.pt'),
+        DeclareLaunchArgument('model_path', default_value='~/yolov8n-pose.pt'),
+        DeclareLaunchArgument('image_topic', default_value='/camera/image_raw'),
+        DeclareLaunchArgument('image_transport', default_value='raw',
+                              choices=['raw', 'compressed'],
+                              description='compressed: <image_topic>/compressed dinlenir'),
         DeclareLaunchArgument('device', default_value='',
                               description="'' = CUDA varsa cuda:0, yoksa cpu"),
         Node(package='fsb_perception', executable='yolo_node', name='fsb_yolo_node',
@@ -49,5 +58,7 @@ def generate_launch_description() -> LaunchDescription:
                           'model_path': ParameterValue(LaunchConfiguration('model_path'),
                                                        value_type=str),
                           'device': ParameterValue(LaunchConfiguration('device'),
-                                                   value_type=str)}]),
+                                                   value_type=str),
+                          'image_topic': LaunchConfiguration('image_topic'),
+                          'image_transport': LaunchConfiguration('image_transport')}]),
     ])

@@ -44,6 +44,7 @@ install(PROGRAMS
   scripts/clearance_monitor.py
   scripts/perf_monitor.py
   scripts/alert_response_monitor.py
+  scripts/posture_monitor.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

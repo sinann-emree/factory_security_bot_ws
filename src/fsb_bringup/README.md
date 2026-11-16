@@ -40,7 +40,7 @@ servisini bekler (sabit gecikme yok). `rviz:=true` → `rviz/sim.rviz` (LaserSca
 - **devriye waypoint'leri** (`/patrol/waypoints`, MarkerArray: yön oku + `W01..`, `P_..` etiketi).
   Renkler: **turuncu, büyük** = şu anki hedef, **yeşil** = bu turda ziyaret edildi,
   **kırmızı** = bu turda atlandı, **mavi** = bekliyor, **mor** = bekleyen öncelikli nokta.
-  Her tur başında renkler maviye/mora döner. **Kırmızı küre + `ALARM #n`** = güvenlik alarmının verildiği konum.
+  Her tur başında renkler maviye/mora döner. **Kırmızı küre + `YATAN #n (doğrulama k)`** = olay listesindeki yatan insanın konumu (çözülünce küçük yeşil `#n çözüldü`).
 - **YOLO görüntüsü** (`/perception/image_annotated`; yalnızca `perception:=true` iken dolar).
 - `map/odom/base_footprint` eksenleri, Navigation 2 paneli; araçlar: *2D Pose Estimate*, *Nav2 Goal*.
 
@@ -72,14 +72,24 @@ ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=
 #   patrol_mode:=legacy → eski 4 noktalı patrol_node (fallback)
 ```
 
-**YOLOv8 ile insan tespiti ve alarm** (insan modelli dünya; ilk açılışta model Fuel'dan iner):
+**Yatan insan tespiti ve olay listesi** (yerde yatan insanlı dünya; ilk açılışta model Fuel'dan iner):
 ```bash
 ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true perception:=true \
-    world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_person.sdf
+    world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_lying.sdf
+#   revisit_interval:=300.0 (sim-s)   security_log_dir:=~/.ros/fsb_security
+#   image_transport:=compressed  → YOLO sıkıştırılmış görüntüden çalışır (sunucu mimarisi denemesi)
+#   cmd_vel_watchdog:=true       → /cmd_vel → cmd_vel_watchdog → /cmd_vel_safe → diff_drive
 ```
-Robot insanı (doğu yükleme alanı, paletlerin arası) ≥ %80 güvenle görünce durur, loga
-`!!! GÜVENLİK ALARMI` yazar, RViz'de kırmızı `ALARM #n` işareti koyar, olayı
-`~/.ros/fsb_security/` altına kaydeder ve 5 sim-s sonra devriyeye devam eder. İşaretli görüntü:
+Robot yerde yatan insanı (batı ana koridor, (−5.0, 0.8)) görünce loga `!!! YATAN İNSAN #n` yazar,
+kişinin harita konumunu hesaplayıp olay listesine ekler, çevresinde 3 açıdan kayıt alır
+(`~/.ros/fsb_security/`: `watchlist.yaml`, `events.jsonl`, `wl*.jpg`) ve devriyeye devam eder.
+`revisit_interval` sonra geri dönüp bakar: kişi hâlâ yerdeyse bildirimi yeniler, yoksa (ve konumu
+gerçekten gördüğünü doğrulayabiliyorsa) `ÇÖZÜLDÜ` yazıp listeden çıkarır. Kişiyi kaldırmak için:
+```bash
+gz service -s /world/factory/set_pose --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 3000 \
+    --req 'name: "lying_person", position: {x: 30, y: 30, z: 0.13}'
+```
+Ayakta insan ve kutu alarm üretmez (`worlds/factory_negative.sdf` ile denenebilir). İşaretli görüntü:
 `ros2 run rqt_image_view rqt_image_view /perception/image_annotated`.
 
 **İsteğe bağlı ölçüm sekmeleri** (ön planda; Ctrl+C → özet):

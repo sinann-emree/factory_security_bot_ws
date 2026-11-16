@@ -10,8 +10,21 @@
   (Gazebo'da fiilen ground truth olurdu; gerçekte manyetometre yoksa güvenilmez; sim = real konfigürasyon).
 - Çıktı: `/odometry/filtered` (30 Hz). `two_d_mode: true`.
 
+## `cmd_vel_watchdog` (`scripts/cmd_vel_watchdog.py`)
+Robot tarafında çalışan hız komutu rölesi: `cmd_vel_in` → `cmd_vel_out` (`TwistStamped`). Son
+komuttan beri `timeout` (0.5 s) geçerse sıfır hız yayınlar ve komut yeniden gelene dek `zero_rate`
+(10 Hz) ile yineler. Navigasyon/algı başka bir makinede (sunucu) çalışırken bağlantı koparsa
+robotun son komutla yürümesini önler. Zaman aşımı komutun **alındığı** ana göre (düğümün saati)
+ölçülür; sunucu–robot saat farkından etkilenmez. Durum: `~/timed_out` (`std_msgs/Bool`).
+```bash
+ros2 run fsb_control cmd_vel_watchdog.py --ros-args -r cmd_vel_in:=/cmd_vel \
+    -r cmd_vel_out:=/cmd_vel_safe -p use_sim_time:=true
+# bringup ile: ... cmd_vel_watchdog:=true  (diff_drive girişi /cmd_vel_safe olur)
+```
+
 ## Dizinler
 - `config/` — `controllers.yaml` (Aşama 2), `ekf.yaml` (Aşama 4)
+- `scripts/` — `cmd_vel_watchdog.py`
 - `launch/`
 
 ## Parametre notları (kurulu sürümden doğrulandı: ros-jazzy-diff-drive-controller 4.42.1)

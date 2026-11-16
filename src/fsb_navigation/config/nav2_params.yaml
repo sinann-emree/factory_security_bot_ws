@@ -158,7 +158,19 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        observation_sources: scan
+        observation_sources: scan keepout
+        # Olay listesindeki yatan kişilerin çevresi (fsb_patrol patrol_executor, map çerçevesinde
+        # PointCloud2). LiDAR düzlemi gövdenin tamamını görmediği için ek engel kaynağı.
+        # Yayıncı yokken etkisizdir. Menzil, bulut çerçevesinin kökenine (map) göre ölçülür.
+        keepout:
+          topic: /security/keepout
+          data_type: "PointCloud2"
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          clearing: false
+          marking: true
+          obstacle_max_range: 100.0
+          obstacle_min_range: 0.0
         scan:
           topic: /scan
           data_type: "LaserScan"
@@ -194,7 +206,19 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        observation_sources: scan
+        observation_sources: scan keepout
+        # Olay listesindeki yatan kişilerin çevresi (fsb_patrol patrol_executor, map çerçevesinde
+        # PointCloud2). LiDAR düzlemi gövdenin tamamını görmediği için ek engel kaynağı.
+        # Yayıncı yokken etkisizdir. Menzil, bulut çerçevesinin kökenine (map) göre ölçülür.
+        keepout:
+          topic: /security/keepout
+          data_type: "PointCloud2"
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          clearing: false
+          marking: true
+          obstacle_max_range: 100.0
+          obstacle_min_range: 0.0
         scan:
           topic: /scan
           data_type: "LaserScan"
