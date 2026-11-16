@@ -2,7 +2,13 @@
 
 **Amaç:** `controllers.yaml` (joint_state_broadcaster + diff_drive_controller), EKF (`robot_localization`) yaml'ı; Aşama 7'de gerçek robot donanım arayüzü.
 
-**Durum:** `controllers.yaml` tamam (Aşama 2). EKF Aşama 4.
+**Durum:** `controllers.yaml` (Aşama 2) ve `ekf.yaml` (Aşama 4) tamam.
+
+## EKF (`config/ekf.yaml`, robot_localization 3.8.3)
+- `odom→base_footprint` TF'inin **tek** yayıncısı (`publish_tf: true`; diff_drive `enable_odom_tf: false`).
+- Girdiler: tekerlek odom `vx, vy, vyaw` + IMU **yalnızca `vyaw`**. Mutlak IMU yaw kullanılmaz
+  (Gazebo'da fiilen ground truth olurdu; gerçekte manyetometre yoksa güvenilmez; sim = real konfigürasyon).
+- Çıktı: `/odometry/filtered` (30 Hz). `two_d_mode: true`.
 
 ## Dizinler
 - `config/` — `controllers.yaml` (Aşama 2), `ekf.yaml` (Aşama 4)

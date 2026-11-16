@@ -93,6 +93,32 @@
   <xacro:property name="imu_size" value="0.01"/>   <!-- VARSAYIM: tipik IMU kartı; andino'da yok -->
   <xacro:property name="imu_mass" value="0.005"/>  <!-- VARSAYIM: ihmal edilebilir küçük kütle; Aşama 7'de ölç -->
 
+  <!-- ===================== SİMÜLASYON SENSÖR PARAMETRELERİ ==============
+       (Aşama 4) andino deposunda sensör sim parametresi yok (andino_gz ayrı depo, referans alınmadı).
+       LiDAR değerleri RPLidar A1 sınıfına göre (andino sensors.yaml:5 mesh adı 'rplidar-a1'):
+       menzil 0.15–12 m, ~1° çözünürlük. Diğerleri proje seçimi; gerçek sürücüler Aşama 7. -->
+  <xacro:property name="lidar_update_rate" value="10"/>     <!-- Hz; çıkış kriteri /scan >= 10 Hz -->
+  <xacro:property name="lidar_samples"     value="360"/>    <!-- 1° çözünürlük -->
+  <xacro:property name="lidar_range_min"   value="0.15"/>   <!-- m, RPLidar A1 sınıfı -->
+  <xacro:property name="lidar_range_max"   value="12.0"/>   <!-- m, RPLidar A1 sınıfı -->
+  <xacro:property name="lidar_noise_std"   value="0.01"/>   <!-- m, gauss; proje seçimi -->
+
+  <xacro:property name="camera_update_rate" value="15"/>    <!-- Hz; YOLO 5 Hz için yeterli -->
+  <xacro:property name="camera_width"       value="640"/>
+  <xacro:property name="camera_height"      value="480"/>
+  <xacro:property name="camera_hfov"        value="1.085"/> <!-- rad = 62.2°, RPi Camera v2 sınıfı; VARSAYIM -->
+  <xacro:property name="camera_clip_near"   value="0.02"/>
+  <xacro:property name="camera_clip_far"    value="30.0"/>
+  <!-- Lens/optik çerçeve kökeni: kamera kutusunun ön yüzünün 1 mm önü.
+       camera_link x = 0.049339 → lens x = 0.049339 + 0.011 = 0.060339 (base_link);
+       gövde ön yüzü x = chassis_cx + chassis_x/2 = 0.056339 → lens gövdenin 4 mm önünde,
+       görüntü gövdeye takılmaz (Aşama 2 notu). -->
+  <xacro:property name="camera_lens_offset" value="${camera_size / 2.0 + 0.001}"/>
+
+  <xacro:property name="imu_update_rate"   value="100"/>    <!-- Hz -->
+  <xacro:property name="imu_gyro_noise_std" value="0.001"/> <!-- rad/s, gauss; proje seçimi -->
+  <xacro:property name="imu_accel_noise_std" value="0.017"/> <!-- m/s², gauss; proje seçimi -->
+
   <!-- ========================== SÜRTÜNME (Gazebo) ======================
        andino_gz deposu referans alınmadığından kaynak yok; proje seçimi.
        Doğrulama: Aşama 3 kayma testi (1 m düz, 360° dönüş). -->

@@ -2,8 +2,11 @@
 <!--
   fsb_sensors.xacro — LiDAR, kamera, IMU linkleri ve joint'leri.
   Konum/ölçüler: fsb_properties.xacro.
-  Gazebo sensör tanımları (gpu_lidar, camera, imu) Aşama 4'te eklenecek;
-  o aşamada sensör <gz_frame_id> değerleri buradaki link adlarıyla birebir eşleşmelidir.
+  Gazebo sensör tanımları (Aşama 4) yalnızca use_sim=true iken eklenir.
+  <gz_frame_id> = URDF link adı (tasarım kuralı): mesaj frame_id'leri TF ile birebir.
+  Gazebo topic adları açıkça verilir ve fsb_gazebo/config/gz_bridge.yaml'da ROS'a eşlenir (kural 15).
+  Not: URDF→SDF dönüşümünde sabit joint'li linkler base_link'e birleştirilir; sensör pozları
+  korunur, frame_id'yi gz_frame_id belirler.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
@@ -28,6 +31,47 @@
     <origin xyz="${lidar_xyz}" rpy="${lidar_rpy}"/>
   </joint>
 
+  <xacro:if value="${use_sim}">
+    <gazebo reference="lidar_link">
+      <sensor name="lidar" type="gpu_lidar">
+        <!-- Sensör kökeni lidar_link (180° dönük); ışın açıları bu çerçevede -->
+        <pose>0 0 0 0 0 0</pose>
+        <topic>scan</topic>
+        <gz_frame_id>lidar_link</gz_frame_id>
+        <update_rate>${lidar_update_rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>${lidar_samples}</samples>
+              <resolution>1</resolution>
+              <min_angle>${-PI}</min_angle>
+              <!-- N örnek tam tur, uç tekrarı yok: artış 2π/N ⇒ max = -π + (N-1)·2π/N = π - 2π/N -->
+              <max_angle>${PI - 2 * PI / lidar_samples}</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>1</samples>
+              <resolution>1</resolution>
+              <min_angle>0</min_angle>
+              <max_angle>0</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>${lidar_range_min}</min>
+            <max>${lidar_range_max}</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>${lidar_noise_std}</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+    </gazebo>
+  </xacro:if>
+
   <!-- ============================== Kamera ============================= -->
   <link name="camera_link">
     <visual>
@@ -50,6 +94,49 @@
     <origin xyz="${camera_xyz}" rpy="0 0 0"/>
   </joint>
 
+  <!-- ROS optik çerçeve (REP 103: z ileri, x sağ, y aşağı). Kökeni lenste (kutunun 1 mm önü).
+       Saf koordinat çerçevesi: kütlesi yok (base_footprint gibi). -->
+  <link name="camera_optical_link"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_link"/>
+    <origin xyz="${camera_lens_offset} 0 0" rpy="${-PI / 2} 0 ${-PI / 2}"/>
+  </joint>
+
+  <xacro:if value="${use_sim}">
+    <gazebo reference="camera_link">
+      <sensor name="camera" type="camera">
+        <!-- Kökeni lense al: gövdenin önünde (bkz. fsb_properties.xacro camera_lens_offset).
+             gz kamerası sensör çerçevesinin +x'ine bakar; görüntü frame_id'si optik çerçeve. -->
+        <pose>${camera_lens_offset} 0 0 0 0 0</pose>
+        <topic>camera/image_raw</topic>
+        <gz_frame_id>camera_optical_link</gz_frame_id>
+        <update_rate>${camera_update_rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <camera>
+          <camera_info_topic>camera/camera_info</camera_info_topic>
+          <optical_frame_id>camera_optical_link</optical_frame_id>
+          <horizontal_fov>${camera_hfov}</horizontal_fov>
+          <image>
+            <width>${camera_width}</width>
+            <height>${camera_height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>${camera_clip_near}</near>
+            <far>${camera_clip_far}</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+      </sensor>
+    </gazebo>
+  </xacro:if>
+
   <!-- =============================== IMU =============================== -->
   <link name="imu_link">
     <visual>
@@ -68,5 +155,30 @@
     <!-- Dönme ekseni üzerinde (x=y=0); gerekçe fsb_properties.xacro -->
     <origin xyz="${imu_xyz}" rpy="0 0 0"/>
   </joint>
+
+  <xacro:if value="${use_sim}">
+    <gazebo reference="imu_link">
+      <sensor name="imu" type="imu">
+        <pose>0 0 0 0 0 0</pose>
+        <topic>imu</topic>
+        <gz_frame_id>imu_link</gz_frame_id>
+        <update_rate>${imu_update_rate}</update_rate>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>${imu_gyro_noise_std}</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>${imu_gyro_noise_std}</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>${imu_gyro_noise_std}</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>${imu_accel_noise_std}</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>${imu_accel_noise_std}</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>${imu_accel_noise_std}</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+    </gazebo>
+  </xacro:if>
 
 </robot>

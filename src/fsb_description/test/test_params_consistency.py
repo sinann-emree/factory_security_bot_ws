@@ -112,6 +112,7 @@ def test_tf_tree(urdf):
         'lidar_joint': ('base_link', 'lidar_link'),
         'camera_joint': ('base_link', 'camera_link'),
         'imu_joint': ('base_link', 'imu_link'),
+        'camera_optical_joint': ('camera_link', 'camera_optical_link'),
     }
     actual = {
         j.get('name'): (j.find('parent').get('link'), j.find('child').get('link'))
@@ -120,11 +121,15 @@ def test_tf_tree(urdf):
     assert actual == expected
 
 
+# Saf koordinat çerçeveleri (kütlesiz): kök link ve kamera optik çerçevesi
+FRAME_ONLY_LINKS = {'base_footprint', 'camera_optical_link'}
+
+
 def test_inertials_valid(urdf):
     for link in urdf.findall('link'):
         name = link.get('name')
-        if name == 'base_footprint':
-            assert link.find('inertial') is None  # kök link: inertial yok
+        if name in FRAME_ONLY_LINKS:
+            assert link.find('inertial') is None, f'{name}: saf çerçeve, inertial olmamalı'
             continue
         inertial = link.find('inertial')
         assert inertial is not None, f'{name}: inertial yok'
@@ -136,6 +141,29 @@ def test_inertials_valid(urdf):
         assert min(ixx, iyy, izz) > 0.0, f'{name}: pozitif tanımlı değil'
         assert ixx + iyy >= izz and ixx + izz >= iyy and iyy + izz >= ixx, \
             f'{name}: üçgen eşitsizliği'
+
+
+def test_sensor_frame_ids_match_links(urdf):
+    links = {lk.get('name') for lk in urdf.findall('link')}
+    sensors = {s.get('name'): s for s in urdf.iter('sensor')}
+    assert set(sensors) == {'lidar', 'camera', 'imu'}
+    expected = {'lidar': 'lidar_link', 'camera': 'camera_optical_link', 'imu': 'imu_link'}
+    for name, frame in expected.items():
+        assert sensors[name].find('gz_frame_id').text == frame
+        assert frame in links
+
+
+def test_camera_lens_in_front_of_chassis(urdf):
+    cam_x = _xyz(_joint(urdf, 'camera_joint'))[0]
+    lens_x = cam_x + _xyz(_joint(urdf, 'camera_optical_joint'))[0]
+    col = urdf.find("link[@name='base_link']/collision")
+    front = (float(col.find('origin').get('xyz').split()[0])
+             + float(col.find('geometry/box').get('size').split()[0]) / 2.0)
+    assert lens_x > front, f'lens x={lens_x} gövde ön yüzü={front}'
+
+
+def test_no_sensors_without_sim():
+    assert not list(_render('false').iter('sensor'))
 
 
 def test_ros2_control_plugin_selection():

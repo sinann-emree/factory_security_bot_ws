@@ -27,4 +27,11 @@ install(DIRECTORY worlds models config launch
   DESTINATION share/${PROJECT_NAME}
   PATTERN ".gitkeep" EXCLUDE)
 
+# Test araçları: ros2 run fsb_gazebo <script>
+install(PROGRAMS
+  scripts/drive_test.py
+  scripts/teleop_test.py
+  scripts/scan_alignment_check.py
+  DESTINATION lib/${PROJECT_NAME})
+
 ament_package()

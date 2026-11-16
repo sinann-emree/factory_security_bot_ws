@@ -8,8 +8,10 @@ Kullanım:
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
-  → (spawner bitince, OnProcessExit) diff_drive_controller spawner
+  → (OnProcessExit) diff_drive_controller spawner → (OnProcessExit) EKF (robot_localization)
+  [+ isteğe bağlı RViz]
 use_sim_time = use_sim (tek noktadan, tasarım kuralı).
+TF: odom→base_footprint yalnızca EKF (diff_drive enable_odom_tf: false).
 """
 
 from launch import LaunchDescription
@@ -28,6 +30,7 @@ def generate_launch_description() -> LaunchDescription:
     use_sim_time = use_sim  # simülasyonda true, gerçek robotta false
     controllers_yaml = PathJoinSubstitution(
         [FindPackageShare('fsb_control'), 'config', 'controllers.yaml'])
+    ekf_yaml = PathJoinSubstitution([FindPackageShare('fsb_control'), 'config', 'ekf.yaml'])
 
     rsp = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution(
@@ -76,6 +79,24 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
     )
 
+    # EKF: tekerlek odom (vx, vy, vyaw) + IMU (vyaw) → /odometry/filtered + odom→base_footprint TF
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[ekf_yaml, {'use_sim_time': use_sim_time}],
+    )
+
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        arguments=['-d', PathJoinSubstitution(
+            [FindPackageShare('fsb_bringup'), 'rviz', 'sim.rviz'])],
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=IfCondition(LaunchConfiguration('rviz')),
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim', default_value='true',
@@ -88,6 +109,9 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument(
             'headless', default_value='false',
             description='true: Gazebo GUI açılmaz (gz sim -s)'),
+        DeclareLaunchArgument(
+            'rviz', default_value='false',
+            description='true: RViz (scan, kamera, EKF odometrisi)'),
 
         rsp,
         sim,
@@ -95,4 +119,6 @@ def generate_launch_description() -> LaunchDescription:
         jsb_spawner,
         # Sıra: broadcaster aktif olduktan sonra diff_drive (Skill 4 adım 4)
         RegisterEventHandler(OnProcessExit(target_action=jsb_spawner, on_exit=[ddc_spawner])),
+        RegisterEventHandler(OnProcessExit(target_action=ddc_spawner, on_exit=[ekf])),
+        rviz,
     ])

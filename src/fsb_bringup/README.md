@@ -9,8 +9,9 @@
 ros2 launch fsb_bringup bringup.launch.py                  # Gazebo GUI ile
 ros2 launch fsb_bringup bringup.launch.py headless:=true   # yalnızca gz sunucusu
 ```
-Sıra: robot_state_publisher → Gazebo + /clock köprüsü + spawn → `joint_state_broadcaster` spawner
-→ (OnProcessExit) `diff_drive_controller` spawner. Spawner'lar `controller_manager` servisini bekler (sabit gecikme yok).
+Sıra: robot_state_publisher → Gazebo + köprü + spawn → `joint_state_broadcaster` spawner
+→ (OnProcessExit) `diff_drive_controller` spawner → (OnProcessExit) EKF. Spawner'lar `controller_manager`
+servisini bekler (sabit gecikme yok). `rviz:=true` → `rviz/sim.rviz` (LaserScan, kamera, EKF odometrisi; sabit çerçeve `odom`).
 
 ## Argümanlar
 | Argüman | Varsayılan | Açıklama |
@@ -18,6 +19,7 @@ Sıra: robot_state_publisher → Gazebo + /clock köprüsü + spawn → `joint_s
 | `use_sim` | `true` | `use_sim_time` buna eşitlenir ve tüm düğümlere iletilir |
 | `world` | `fsb_gazebo/worlds/factory.sdf` | |
 | `headless` | `false` | |
+| `rviz` | `false` | RViz (scan + kamera + EKF) |
 
 ## Teleop
 `diff_drive_controller` yalnızca `TwistStamped` kabul eder; teleop_twist_keyboard 2.4.1 `stamped` parametresini destekler (twist_stamper gerekmez):
@@ -30,4 +32,4 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args \
 ## Bilinen durum
 - `/gz_ros_control` (gz_ros2_control 1.2.20 eklentisinin yardımcı düğümü) `use_sim_time=false` gösterir; eklenti
   `use_sim_time:=true`'yu yalnızca `controller_manager`'a verir. Kontrol döngüsü (controller_manager + controller'lar) `true`.
-- Şu an `odom` TF'i yayınlanmıyor (diff_drive `enable_odom_tf: false`); `odom→base_footprint` EKF ile Aşama 4'te gelir.
+- `odom→base_footprint` yalnızca EKF'den gelir (doğrulama: EKF durdurulunca bu TF kesilir, diff_drive aktifken bile).
