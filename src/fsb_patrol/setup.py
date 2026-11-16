@@ -28,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'patrol_node = fsb_patrol.patrol_node:main',
         ],
     },
 )

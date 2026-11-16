@@ -1,0 +1,15 @@
+# Devriye noktaları (map çerçevesi; harita dünya ile çakışık, robot (0,0,0)'da başlar).
+# Seçim: factory.sdf engel yerleşimine göre ≥ 1 m boşluklu noktalar (fsb_gazebo/worlds/factory.sdf):
+#   W1 (4.5, 0)  orta koridor doğu     yaw 2.03 → W2'ye bakar
+#   W2 (3, 3)    kuzey ara koridor (x∈[2,4]), raflar x=2/4'te, kolon (3,4.25) 1.25 m uzakta
+#   W3 (-3, -3)  güney ara koridor (x∈[-4,-2]), kolon (-3,-4.25) 1.25 m uzakta
+#   W4 (-4.5, 0) orta koridor batı     yaw 0 → W1'e bakar
+fsb_patrol:
+  ros__parameters:
+    frame_id: map
+    loops: 0            # 0 = sonsuz
+    action_name: follow_waypoints
+    waypoints: [ 4.5,  0.0,  2.03,
+                 3.0,  3.0, -1.5708,
+                -3.0, -3.0,  1.5708,
+                -4.5,  0.0,  0.0]

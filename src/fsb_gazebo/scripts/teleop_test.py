@@ -29,7 +29,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--world', default='factory')
     ap.add_argument('--model', default='fsb_robot')
-    ap.add_argument('--cmd-topic', default='/diff_drive_controller/cmd_vel')
+    ap.add_argument('--cmd-topic', default='/cmd_vel')
     ap.add_argument('--speed', type=float, default=0.2)
     ap.add_argument('--turn', type=float, default=0.8)
     args = ap.parse_args(argv)

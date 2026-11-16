@@ -5,6 +5,8 @@ Kullanım:
   ros2 launch fsb_bringup bringup.launch.py                 # use_sim:=true, Gazebo GUI
   ros2 launch fsb_bringup bringup.launch.py headless:=true  # yalnızca gz sunucusu
   ros2 launch fsb_bringup bringup.launch.py use_sim:=false  # gerçek robot (Aşama 7)
+  ros2 launch fsb_bringup bringup.launch.py localization:=slam   # haritalama (SLAM Toolbox)
+  ros2 launch fsb_bringup bringup.launch.py localization:=amcl   # AMCL + Nav2 (map:=...)
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
@@ -12,6 +14,8 @@ Başlatma sırası:
   [+ isteğe bağlı RViz]
 use_sim_time = use_sim (tek noktadan, tasarım kuralı).
 TF: odom→base_footprint yalnızca EKF (diff_drive enable_odom_tf: false).
+    map→odom yalnızca SLAM Toolbox (localization:=slam) VEYA AMCL (localization:=amcl), asla ikisi.
+cmd_vel: diff_drive_controller ~/cmd_vel → /cmd_vel (Nav2 collision_monitor çıkışı, teleop).
 """
 
 from launch import LaunchDescription
@@ -20,7 +24,7 @@ from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, Log
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EqualsSubstitution, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -74,7 +78,9 @@ def generate_launch_description() -> LaunchDescription:
         arguments=['diff_drive_controller',
                    '--controller-manager', '/controller_manager',
                    '--controller-manager-timeout', '120',
-                   '--param-file', controllers_yaml],
+                   '--param-file', controllers_yaml,
+                   # Nav2 collision_monitor çıkışı /cmd_vel → diff_drive (TwistStamped)
+                   '--controller-ros-args', '-r /diff_drive_controller/cmd_vel:=/cmd_vel'],
         parameters=[{'use_sim_time': use_sim_time}],
         output='screen',
     )
@@ -86,6 +92,19 @@ def generate_launch_description() -> LaunchDescription:
         name='ekf_filter_node',
         output='screen',
         parameters=[ekf_yaml, {'use_sim_time': use_sim_time}],
+    )
+
+    nav_launch = PathJoinSubstitution([FindPackageShare('fsb_navigation'), 'launch'])
+    slam = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([nav_launch, 'slam.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
+        condition=IfCondition(EqualsSubstitution(LaunchConfiguration('localization'), 'slam')),
+    )
+    nav2 = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([nav_launch, 'navigation.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time,
+                          'map': LaunchConfiguration('map')}.items(),
+        condition=IfCondition(EqualsSubstitution(LaunchConfiguration('localization'), 'amcl')),
     )
 
     rviz = Node(
@@ -110,6 +129,14 @@ def generate_launch_description() -> LaunchDescription:
             'headless', default_value='false',
             description='true: Gazebo GUI açılmaz (gz sim -s)'),
         DeclareLaunchArgument(
+            'localization', default_value='none', choices=['none', 'slam', 'amcl'],
+            description='map→odom kaynağı: none | slam (haritalama) | amcl (+ Nav2)'),
+        DeclareLaunchArgument(
+            'map',
+            default_value=PathJoinSubstitution(
+                [FindPackageShare('fsb_navigation'), 'maps', 'factory.yaml']),
+            description='localization:=amcl için harita yaml'),
+        DeclareLaunchArgument(
             'rviz', default_value='false',
             description='true: RViz (scan, kamera, EKF odometrisi)'),
 
@@ -120,5 +147,7 @@ def generate_launch_description() -> LaunchDescription:
         # Sıra: broadcaster aktif olduktan sonra diff_drive (Skill 4 adım 4)
         RegisterEventHandler(OnProcessExit(target_action=jsb_spawner, on_exit=[ddc_spawner])),
         RegisterEventHandler(OnProcessExit(target_action=ddc_spawner, on_exit=[ekf])),
+        slam,
+        nav2,
         rviz,
     ])

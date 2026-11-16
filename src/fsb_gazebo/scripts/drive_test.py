@@ -303,7 +303,7 @@ def main(argv=None) -> int:
     ap.add_argument('mode', choices=('basic', 'drift'))
     ap.add_argument('--world', default='factory')
     ap.add_argument('--model', default='fsb_robot')
-    ap.add_argument('--cmd-topic', default='/diff_drive_controller/cmd_vel')
+    ap.add_argument('--cmd-topic', default='/cmd_vel')
     ap.add_argument('--duration', type=float, default=300.0, help='drift: sürüş süresi (sim-s)')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--box-x', type=float, default=3.5,

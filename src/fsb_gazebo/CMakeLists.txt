@@ -32,6 +32,11 @@ install(PROGRAMS
   scripts/drive_test.py
   scripts/teleop_test.py
   scripts/scan_alignment_check.py
+  scripts/mapping_tour.py
+  scripts/map_quality_check.py
+  scripts/amcl_check.py
+  scripts/localization_monitor.py
+  scripts/dynamic_obstacle_test.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

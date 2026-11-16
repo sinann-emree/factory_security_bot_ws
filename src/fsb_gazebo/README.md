@@ -2,7 +2,7 @@
 
 **Amaç:** Gazebo Harmonic (gz-sim 8) fabrika dünyası, `ros_gz_bridge` yaml'ı ve simülasyon launch dosyası.
 
-**Durum:** Aşama 4 tamam (LiDAR, kamera, IMU köprüleri; test araçları).
+**Durum:** Aşama 5 tamam (LiDAR, kamera, IMU köprüleri; SLAM/AMCL/Nav2 test araçları).
 
 ## Dizinler
 - `worlds/factory.sdf` — 20×14 m salon, 3 m duvarlar; raf sıraları y=±3.0 / ±5.5 (4×0.8×2 m);
@@ -43,6 +43,11 @@ köprüye ground truth eklenmez.
 | `drive_test.py basic` | 1 m ileri, ±360° dönüş: tekerlek odom ↔ gerçek konum (Aşama 3 kriteri) |
 | `drive_test.py drift --duration 300 --seed 1` | Serbest alanda rastgele hedefler + yerinde dönüşler, sonra EKF'ye göre başlangıca dönüş. EKF ve tekerlek odom'un drift'i (son, duraklarken maks., hareket halinde maks.) raporlanır (Aşama 4 kriteri: < 10 cm, < 5°). Hedef kutusu `--box-x/--box-y` (varsayılan ±3.5 / ±1.5 m, başlangıca göre; robot (0,0)'dan başlamalı) |
 | `teleop_test.py` | teleop_twist_keyboard'u pty'de çalıştırıp tuş gönderir (stamped zinciri uçtan uca) |
+| `mapping_tour.py` | SLAM haritalaması için önceden tanımlı yavaş tur (0.15 m/s, ≤ 0.4 rad/s), EKF'ye göre noktadan noktaya; `/cmd_vel`'e yazar (Nav2 kapalıyken, `localization:=slam`) |
+| `map_quality_check.py --map <yaml>` | Kaydedilmiş haritayı SDF kutularıyla karşılaştırır: dolu hücre → gerçek yüzey uzaklığı (medyan/p95, >10 cm = çift duvar), global hizalama (dθ, dx, dy), duvar kalınlığı, kapsama |
+| `amcl_check.py` | Kasıtlı hatalı `/initialpose` (+0.5, -0.4 m, +20°) verir, robotu `/cmd_vel_nav` zinciriyle döndürüp sürer; AMCL hatası, kovaryans ve parçacık yayılımı zamana göre; yakınsama süresi |
+| `localization_monitor.py` | map→odom adımları (sıçrama sayısı, maks Δxy/Δyaw) ve map→base_footprint ↔ gerçek konum hatası; Ctrl+C / `--duration` ile özet |
+| `dynamic_obstacle_test.py` | NavigateToPose A→B sırasında rotaya haritada olmayan 0.5 m kutu spawn eder (`/world/factory/create`); min. açıklık, yanal sapma, kutu yer değiştirmesi (çarpışma) ölçer, kutuyu siler |
 | `scan_alignment_check.py` | Her `/scan` noktasını gerçek poz × TF ile dünyaya yansıtıp SDF kutularına uzaklığı ölçer; aynısını +180° yanlış montaj varsayımıyla da yapar. Simetrik olmayan bir pozda çalıştırın (ör. `gz service -s /world/factory/set_pose ...`) |
 
 ## Kurallar
