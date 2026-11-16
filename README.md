@@ -9,8 +9,9 @@
 > LiDAR, RGB camera and IMU uses ros2_control (identical stack for simulation and real hardware),
 > EKF odometry fusion, SLAM Toolbox / AMCL / Nav2, and a patrol planner that generates waypoints
 > automatically from the map (medial-axis skeleton + greedy set cover + TSP) and executes them with an
-> idleness-based strategy. Simulation stages 0–5b are complete and verified; YOLOv8 perception
-> (stage 6) and the real-robot port (stage 7) are planned.
+> idleness-based strategy. A YOLOv8 node detects people in the camera stream and raises security
+> alerts that make the patrol stop, log the incident and resume. Simulation stages 0–6 are complete
+> and verified; the real-robot port (stage 7) is planned.
 
 **ROS 2 Jazzy + Gazebo Harmonic tabanlı, fabrika zemininde otonom devriye gezen güvenlik robotu.**
 
@@ -96,6 +97,20 @@ kapsama **%99.95** (dar bölge %99.94), 12/12 koridor.
 
 ![Gerçek yoldan ölçülen kapsama](docs/images/coverage_real.png)
 
+### YOLOv8 ile insan tespiti ve güvenlik alarmı (`fsb_perception`)
+- `yolo_node`: `/camera/image_raw` → `/perception/detections` (`vision_msgs/Detection2DArray`),
+  `/perception/image_annotated`; çıkarım ayrı iş parçacığında, ~5.4 Hz (yolov8n, 640×480).
+- İnsan ≥ %80 güvenle art arda 3 karede görülünce `/security/alerts`; `patrol_executor` **durur,
+  uyarır, olayı kaydeder** (jsonl + işaretli kare) **ve aynı hedefe devam eder**.
+- Sim hedefi: Gazebo Fuel "Walking person" (`factory_person.sdf`). Devriye sırasında hedefin
+  göründüğü karelerin **%95.1'i ≥ 0.8 güven** (431/453, medyan 0.891).
+- Tam tur (YOLO CUDA açık): **30/30 hedef, 0 atlama, 5 alarm** ele alındı; hareket halindeyken
+  gelen alarmda robot 0.67 s'de durdu, ~4.5 s bekleyip devam etti.
+- Nav2'ye etkisi (240 s devriye, 16 çekirdek; algısız → YOLO CUDA → YOLO CPU): RTF 0.951 → 0.936 →
+  0.920; Nav2 CPU %150 → %158 → %164 (tek çekirdek cinsinden); YOLO süreci %68 (CUDA) / %161 (CPU).
+- pip OpenCV ↔ `cv_bridge` çakışması `~/.local`'a dokunmadan çözülür
+  ([`src/fsb_perception/README.md`](src/fsb_perception/README.md)).
+
 ---
 
 ## Mimari
@@ -105,11 +120,11 @@ kapsama **%99.95** (dar bölge %99.94), 12/12 koridor.
 |---|---|---|
 | `fsb_description` | ament_cmake | URDF/xacro, sensörler, `<ros2_control>` (sim/real), RViz |
 | `fsb_control` | ament_cmake | `controllers.yaml`, `ekf.yaml` (gerçek robot hw interface: planlanıyor) |
-| `fsb_gazebo` | ament_cmake | `factory.sdf` dünyası, `gz_bridge.yaml`, sim launch, test/ölçüm betikleri |
+| `fsb_gazebo` | ament_cmake | `factory.sdf` / `factory_person.sdf` dünyaları, `gz_bridge.yaml`, sim launch, test/ölçüm betikleri |
 | `fsb_navigation` | ament_cmake | SLAM Toolbox, AMCL, Nav2 parametreleri ve launch, kayıtlı harita |
 | `fsb_bringup` | ament_cmake | Tek giriş noktası `bringup.launch.py`, RViz konfigürasyonları |
-| `fsb_patrol` | ament_python | `patrol_planner`, `patrol_executor`, `coverage_monitor` |
-| `fsb_perception` | ament_python | YOLOv8 düğümü (iskelet; Aşama 6'da planlanıyor) |
+| `fsb_patrol` | ament_python | `patrol_planner`, `patrol_executor` (+ güvenlik alarmına tepki), `coverage_monitor` |
+| `fsb_perception` | ament_python | YOLOv8 düğümü `yolo_node`: `/perception/detections`, `/perception/image_annotated`, `/security/alerts` |
 
 Her paketin kendi `README.md` dosyasında launch komutları ve parametreler bulunur.
 
@@ -123,7 +138,9 @@ flowchart LR
     gz -- "/scan /imu /camera /clock" --> ctrl
     ctrl -- "EKF: odom→base_footprint" --> nav
     nav -- "NavigateToPose" --> patrol
-    perc["fsb_perception<br/>(planlanıyor)"] -.-> patrol
+    bringup --> perc[fsb_perception]
+    gz -- "/camera/image_raw" --> perc
+    perc -- "/security/alerts" --> patrol
 ```
 
 ### TF ağacı
@@ -158,8 +175,12 @@ sudo apt install -y \
   ros-jazzy-slam-toolbox ros-jazzy-robot-localization \
   ros-jazzy-xacro ros-jazzy-joint-state-publisher-gui \
   ros-jazzy-teleop-twist-keyboard liburdfdom-tools \
-  python3-numpy python3-scipy python3-yaml python3-matplotlib
+  python3-numpy python3-scipy python3-yaml python3-matplotlib \
+  ros-jazzy-vision-msgs ros-jazzy-cv-bridge python3-opencv python3-pil python3-psutil
 ```
+
+YOLOv8 algısı (isteğe bağlı, `perception:=true`) için ayrıca `~/fsb_venv` sanal ortamı ve
+`~/yolov8n.pt` gerekir: [`src/fsb_perception/README.md`](src/fsb_perception/README.md).
 
 Depoyu klonlayıp derleyin (`--symlink-install` **kullanılmaz**):
 
@@ -193,6 +214,10 @@ ros2 launch fsb_bringup bringup.launch.py localization:=slam rviz:=true
 
 # AMCL + Nav2 + 5 turluk idleness devriyesi (tek komut)
 ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=5
+
+# Devriye + YOLOv8 insan tespiti (insan modelli dünya; ~/fsb_venv gerekir, bkz. src/fsb_perception/README.md)
+ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true perception:=true \
+    world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_person.sdf
 ```
 
 Sık kullanılan argümanlar: `headless:=true` (yalnızca gz sunucusu), `patrol_mode:=idleness|sequential|random|legacy`,
@@ -216,7 +241,7 @@ Harita değişince waypoint'leri yeniden üretmek için: [`src/fsb_patrol/README
 | 4 | Sensörler (LiDAR, kamera, IMU) ve EKF | ✅ Tamamlandı |
 | 5 | SLAM Toolbox, AMCL, Nav2, waypoint devriyesi | ✅ Tamamlandı |
 | 5b | Haritadan otomatik kapsamlı devriye | ✅ Tamamlandı |
-| 6 | YOLOv8 ile insan/anomali/ihlal tespiti, `/security/alerts` | 🗓️ **Planlanıyor** |
+| 6 | YOLOv8 ile insan tespiti, `/security/alerts`, devriye tepkisi | ✅ Tamamlandı |
 | 7 | Gerçek robota geçiş (`fsb_hardware`, `use_sim:=false`, kalibrasyon) | 🗓️ **Planlanıyor** |
 
 

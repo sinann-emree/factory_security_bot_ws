@@ -42,6 +42,8 @@ install(PROGRAMS
   scripts/slam_replay_eval.py
   scripts/generate_factory_world.py
   scripts/clearance_monitor.py
+  scripts/perf_monitor.py
+  scripts/alert_response_monitor.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

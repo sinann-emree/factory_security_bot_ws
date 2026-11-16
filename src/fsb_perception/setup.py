@@ -28,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'yolo_node = fsb_perception.yolo_node:main',
         ],
     },
 )

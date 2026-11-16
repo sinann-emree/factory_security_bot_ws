@@ -10,12 +10,17 @@ Kullanım:
   ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=5
       # GUI'li Gazebo + RViz (nav.rviz) + AMCL/Nav2 + patrol_executor (idleness), tek komut
       # patrol_mode:=sequential|random|legacy (legacy = eski 4 noktalı patrol_node)
+  ros2 launch fsb_bringup bringup.launch.py localization:=amcl patrol:=true perception:=true \
+      world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_person.sdf
+      # + YOLOv8 (fsb_perception, ~/fsb_venv) ve insan modelli dünya: tespit → /security/alerts
+      # → patrol_executor durur, uyarır, kaydeder, devam eder
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
   → (OnProcessExit) diff_drive_controller spawner → (OnProcessExit) EKF (robot_localization)
-  [+ isteğe bağlı RViz]
-use_sim_time = use_sim (proje tasarım kuralı: use_sim_time tek noktadan, launch argümanıyla yönetilir).
+  → SLAM / Nav2 → (perception:=true) YOLO   [+ isteğe bağlı RViz]
+use_sim_time = use_sim (proje tasarım kuralı: use_sim_time tek noktadan, launch argümanıyla
+yönetilir).
 TF: odom→base_footprint yalnızca EKF (diff_drive enable_odom_tf: false).
     map→odom yalnızca SLAM Toolbox (localization:=slam) VEYA AMCL (localization:=amcl), asla ikisi.
 cmd_vel: diff_drive_controller ~/cmd_vel → /cmd_vel (Nav2 collision_monitor çıkışı, teleop).
@@ -111,6 +116,15 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(EqualsSubstitution(LaunchConfiguration('localization'), 'amcl')),
     )
 
+    # Algı: kendi venv'inde çalışır (bkz. fsb_perception/launch/perception.launch.py)
+    perception = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution(
+            [FindPackageShare('fsb_perception'), 'launch', 'perception.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time,
+                          'device': LaunchConfiguration('yolo_device')}.items(),
+        condition=IfCondition(LaunchConfiguration('perception')),
+    )
+
     rviz = Node(
         package='rviz2',
         executable='rviz2',
@@ -196,6 +210,12 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument(
             'coverage', default_value='false',
             description='true: coverage_monitor da başlar (patrol_executor ile)'),
+        DeclareLaunchArgument(
+            'perception', default_value='false',
+            description='true: YOLOv8 algı düğümü (fsb_perception; ~/fsb_venv gerekli)'),
+        DeclareLaunchArgument(
+            'yolo_device', default_value='',
+            description="YOLO cihazı: '' = CUDA varsa cuda:0, yoksa cpu | cpu | cuda:0"),
 
         rsp,
         sim,
@@ -206,6 +226,7 @@ def generate_launch_description() -> LaunchDescription:
         RegisterEventHandler(OnProcessExit(target_action=ddc_spawner, on_exit=[ekf])),
         slam,
         nav2,
+        perception,
         rviz,
         patrol,
         patrol_legacy,

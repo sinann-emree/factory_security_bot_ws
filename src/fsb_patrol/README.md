@@ -63,6 +63,31 @@ olmaz. RViz için `/patrol/waypoints` (`visualization_msgs/MarkerArray`, transie
 her hedef için yön oku + etiket; turuncu = şu anki hedef, yeşil = bu turda ziyaret, kırmızı = atlandı,
 mavi = bekliyor, mor = bekleyen öncelikli nokta (`fsb_bringup/rviz/nav.rviz`'de hazır). Her tur sonunda `Tur k TAMAM (sim/duvar)` özeti, en sonda `DEVRİYE BİTTİ`.
 
+### Güvenlik alarmına tepki (`/security/alerts`)
+`fsb_perception` `yolo_node` bir insanı ≥ %80 güvenle art arda 3 karede görünce
+`/security/alerts` (`vision_msgs/Detection2D`) yayınlar. `patrol_executor`:
+1. **Dur** — etkin Nav2 hedefini iptal eder (robot durur), hedefi hatırlar.
+2. **Uyar** — `!!! GÜVENLİK ALARMI #n ...` WARN logu; RViz'de robotun konumunda kırmızı küre +
+   `ALARM #n person 0.93` etiketi (`/patrol/waypoints`, `alert` ad alanı).
+3. **Kaydet** — `alert_log_dir/events.jsonl`'a bir satır (duvar/sim zamanı, sınıf, güven, kutu, robotun
+   `map` pozu, tur, hedef, iptal gecikmesi, devam zamanı) ve alarm anındaki işaretli kamera karesi
+   (`alarm_<zaman>_<n>.jpg`, `/perception/image_annotated`'tan).
+4. **Devam** — `alert_hold` sim-s sonra aynı hedefi yeniden gönderir; tur kaldığı yerden sürer
+   (hedef atlanmış sayılmaz, olay süresi hedef zaman aşımına yazılmaz).
+
+Olay bittikten sonra `alert_cooldown` sim-s boyunca yeni alarmlar yok sayılır (aynı kişi için sürekli
+durmasın); sayıları `DEVRİYE BİTTİ` özetinde `alarm n (yok sayılan m)` olarak görünür.
+
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `react_to_alerts` | `true` | `false` → alarmlar dinlenmez |
+| `alert_topic` | `/security/alerts` | |
+| `alert_hold` | `5.0` | sim-s, alarmda bekleme (launch argümanı da var) |
+| `alert_cooldown` | `120.0` | sim-s, olay sonrası yok sayma süresi (launch argümanı da var) |
+| `alert_max_age` | `2.0` | sim-s; bundan eski kareye ait (kuyrukta beklemiş) alarm yok sayılır |
+| `alert_log_dir` | `~/.ros/fsb_security` | `events.jsonl` + kareler |
+| `alert_image_topic` | `/perception/image_annotated` | `''` → kare kaydedilmez |
+
 ## 3. `coverage_monitor` — gerçek yoldan kapsama
 TF `map→camera_link` pozlarından planlayıcıyla AYNI görüş modeliyle (FOV + menzil + ışın izleme)
 gerçekten görülen serbest alan yüzdesini, dar bölge kapsamasını ve girilen koridor segmentlerini

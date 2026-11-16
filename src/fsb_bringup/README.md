@@ -2,7 +2,7 @@
 
 **Amaç:** Tek giriş noktası `bringup.launch.py`. `use_sim` argümanı ile Gazebo veya gerçek robot yolunu seçer; `use_sim_time` buradan tüm düğümlere iletilir.
 
-**Durum:** Simülasyon yolu + SLAM/AMCL/Nav2 çalışıyor (Aşama 5). Gerçek robot yolu Aşama 7.
+**Durum:** Simülasyon yolu + SLAM/AMCL/Nav2 + devriye + YOLOv8 algısı çalışıyor (Aşama 6). Gerçek robot yolu Aşama 7.
 
 ## Launch
 ```bash
@@ -26,6 +26,8 @@ servisini bekler (sabit gecikme yok). `rviz:=true` → `rviz/sim.rviz` (LaserSca
 | `rviz_config` | otomatik | `localization:=none` → `rviz/sim.rviz` (sabit çerçeve `odom`; scan, kamera, EKF); `slam`/`amcl` → `rviz/nav.rviz` (sabit çerçeve `map`) |
 | `patrol` | `false` | `true` → `fsb_patrol` devriyesini de başlat (yalnızca `localization:=amcl`; değilse yok sayılır ve loglanır) |
 | `loops` | `0` | devriye tur sayısı, 0 = sonsuz |
+| `perception` | `false` | `true` → `fsb_perception` YOLOv8 düğümü (`~/fsb_venv` gerekli, bkz. `fsb_perception/README.md`) |
+| `yolo_device` | otomatik | `cpu` / `cuda:0`; verilmezse CUDA varsa `cuda:0` |
 | `localization` | `none` | `none` / `slam` (slam_toolbox haritalama) / `amcl` (map_server + AMCL + Nav2) |
 | `map` | `fsb_navigation/maps/factory.yaml` | `localization:=amcl` için harita |
 
@@ -38,7 +40,8 @@ servisini bekler (sabit gecikme yok). `rviz:=true` → `rviz/sim.rviz` (LaserSca
 - **devriye waypoint'leri** (`/patrol/waypoints`, MarkerArray: yön oku + `W01..`, `P_..` etiketi).
   Renkler: **turuncu, büyük** = şu anki hedef, **yeşil** = bu turda ziyaret edildi,
   **kırmızı** = bu turda atlandı, **mavi** = bekliyor, **mor** = bekleyen öncelikli nokta.
-  Her tur başında renkler maviye/mora döner.
+  Her tur başında renkler maviye/mora döner. **Kırmızı küre + `ALARM #n`** = güvenlik alarmının verildiği konum.
+- **YOLO görüntüsü** (`/perception/image_annotated`; yalnızca `perception:=true` iken dolar).
 - `map/odom/base_footprint` eksenleri, Navigation 2 paneli; araçlar: *2D Pose Estimate*, *Nav2 Goal*.
 
 Her sekmede önce (tüm sekmelerde **aynı** `ROS_DOMAIN_ID`):
@@ -68,6 +71,16 @@ ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=
 #   patrol_mode:=idleness|sequential|random (varsayılan idleness)  coverage:=true
 #   patrol_mode:=legacy → eski 4 noktalı patrol_node (fallback)
 ```
+
+**YOLOv8 ile insan tespiti ve alarm** (insan modelli dünya; ilk açılışta model Fuel'dan iner):
+```bash
+ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true perception:=true \
+    world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_person.sdf
+```
+Robot insanı (doğu yükleme alanı, paletlerin arası) ≥ %80 güvenle görünce durur, loga
+`!!! GÜVENLİK ALARMI` yazar, RViz'de kırmızı `ALARM #n` işareti koyar, olayı
+`~/.ros/fsb_security/` altına kaydeder ve 5 sim-s sonra devriyeye devam eder. İşaretli görüntü:
+`ros2 run rqt_image_view rqt_image_view /perception/image_annotated`.
 
 **İsteğe bağlı ölçüm sekmeleri** (ön planda; Ctrl+C → özet):
 ```bash

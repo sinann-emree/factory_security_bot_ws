@@ -1,0 +1,16 @@
+# fsb_yolo_node parametreleri (ayrıntı: fsb_perception/yolo_node.py başlığı).
+# model_path ve device perception.launch.py argümanlarıyla da verilebilir (argüman bu dosyayı ezer).
+fsb_yolo_node:
+  ros__parameters:
+    model_path: "~/yolov8n.pt"
+    confidence: 0.5            # yayınlanan tespitler için alt eşik
+    device: ""                 # "" = CUDA varsa cuda:0, yoksa cpu
+    target_classes: ["person"]
+    rate: 5.0                  # Hz
+    imgsz: 640
+    cpu_threads: 2             # yalnızca device=cpu
+    image_topic: "/camera/image_raw"
+    alert_classes: ["person"]
+    alert_confidence: 0.8      # alarm eşiği (çıkış kriteri: hedef ≥ %80 güven)
+    alert_min_frames: 3        # art arda bu kadar çıkarımda eşik üstü → alarm
+    alert_period: 2.0          # s; hedef görünür kaldıkça alarm yineleme aralığı

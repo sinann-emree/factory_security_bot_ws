@@ -6,13 +6,20 @@ Engel yerleşimi (raf/kolon/palet/duvar) değiştirilecekse SDF'i elle değil bu
 map_quality_check.py ve scan_alignment_check.py referans geometriyi SDF kutularından okur.
 Çıktı, Aşama 4 sonrası depodaki factory.sdf ile bayt bayt aynıdır.
 
+İnsan modeli (YOLO hedefi): --person ile Gazebo Fuel'dan bir model <include> edilir (statik).
+Model dosyaları depoda tutulmaz; Gazebo ilk açılışta indirip ~/.gz/fuel altında önbelleğe alır
+(ilk açılışta internet gerekir). --person verilmezse çıktı factory.sdf ile bayt bayt aynıdır.
+
 Kullanım:
   ros2 run fsb_gazebo generate_factory_world.py <çıktı.sdf>
   # ör. src/fsb_gazebo/worlds/factory.sdf (değiştirmeden önce yedek alın), sonra paketi derleyin
+  ros2 run fsb_gazebo generate_factory_world.py <çıktı.sdf> --person walking \
+      --person-pose 9.2 0.0 3.14159265   # worlds/factory_person.sdf böyle üretildi
 """
 
 import argparse
-from typing import List, Tuple
+import math
+from typing import Dict, List, Tuple
 
 RGB = Tuple[float, float, float]
 
@@ -61,7 +68,33 @@ def models() -> List[str]:
     return m
 
 
-def world_sdf() -> str:
+# Gazebo Fuel insan modelleri (OpenRobotics). yaw_offset: modelin yüzü dünya +x'e baksın diye
+# eklenen sabit dönüş (modelin kendi ön yönü; kamera görüntüsünden doğrulandı).
+FUEL = 'https://fuel.gazebosim.org/1.0/OpenRobotics/models/'
+# Dördü de kendi çerçevesinde -y'ye bakar → +90°. ("Male visitor" bir <actor>: statik
+# yerleştirilemiyor, betiği pozu eziyor ve zemine gömülüyor; listeye alınmadı.)
+PERSONS: Dict[str, Tuple[str, float]] = {
+    'walking': (FUEL + 'Walking person', math.pi / 2),
+    'standing': (FUEL + 'Standing person', math.pi / 2),
+    'casual_female': (FUEL + 'Casual female', math.pi / 2),
+    'rescue_randy': (FUEL + 'Rescue Randy', math.pi / 2),
+}
+PERSON_NAME = 'intruder_person'
+
+
+def person(kind: str, x: float, y: float, yaw: float) -> str:
+    """Fuel insan modeli; yaw = yüzün baktığı yön (dünya çerçevesi, rad)."""
+    uri, yaw_offset = PERSONS[kind]
+    return f"""
+    <include>
+      <name>{PERSON_NAME}</name>
+      <static>true</static>
+      <pose>{x} {y} 0 0 0 {yaw + yaw_offset:.6f}</pose>
+      <uri>{uri}</uri>
+    </include>"""
+
+
+def world_sdf(extra: str = '') -> str:
     return f"""<?xml version="1.0"?>
 <!--
   factory.sdf — Fabrika temalı basit dünya (Gazebo Harmonic / gz-sim 8)
@@ -114,7 +147,7 @@ def world_sdf() -> str:
         </visual>
       </link>
     </model>
-{''.join(models())}
+{''.join(models())}{extra}
   </world>
 </sdf>
 """
@@ -124,9 +157,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('output', help='yazılacak .sdf yolu')
+    ap.add_argument('--person', choices=sorted(PERSONS), help='eklenecek Fuel insan modeli')
+    ap.add_argument('--person-pose', nargs=3, type=float, default=[9.2, 0.0, 3.14159265],
+                    metavar=('X', 'Y', 'YAW'), help='konum (m) ve yüzün baktığı yön (rad)')
     args = ap.parse_args()
+    extra = person(args.person, *args.person_pose) if args.person else ''
     with open(args.output, 'w', encoding='utf-8') as f:
-        f.write(world_sdf())
+        f.write(world_sdf(extra))
     return 0
 
 

@@ -12,26 +12,45 @@ edilmesi ya da atlanması. Ulaşılamayan / zaman aşımına uğrayan hedef ATLA
 olmaz. Öncelikli noktalar dünyaya özel ayrı bir yaml'dan gelir (priority_file), ağırlıkları
 idleness'ı çarpar; diğer hedeflere uzaklıkları açılışta Nav2 ComputePathToPose ile ölçülür.
 
+Güvenlik alarmı (/security/alerts, vision_msgs/Detection2D; fsb_perception yolo_node yayınlar):
+  1. DUR    — etkin Nav2 hedefi iptal edilir (controller sıfır hız basar), hedef hatırlanır.
+  2. UYAR   — WARN logu + RViz'de robotun konumunda kırmızı "ALARM" işareti (patrol/waypoints).
+  3. KAYDET — alert_log_dir/events.jsonl'a bir satır (zaman, sınıf, güven, kutu, robotun map pozu,
+              tur, hedef, iptal gecikmesi) + alarm anındaki işaretli kamera karesi (.jpg).
+  4. DEVAM  — alarmdan alert_hold sim-s sonra (ve robot durmuşsa) aynı hedef yeniden gönderilir.
+  Olay bittikten sonra alert_cooldown sim-s boyunca yeni alarmlar yok sayılır (aynı kişi için
+  tekrar tekrar durmasın); yok sayılanlar sayılır. Olay sırasında hedef zaman aşımı işlemez.
+
 Parametreler: waypoints_file, priority_file (''), mode, loops (0 = sonsuz), goal_timeout (sim-s),
-  nominal_speed (m/s), seed, frame_id (map), base_frame (base_footprint).
+  nominal_speed (m/s), seed, frame_id (map), base_frame (base_footprint),
+  react_to_alerts (true), alert_topic (/security/alerts), alert_hold (5.0 sim-s),
+  alert_cooldown (120.0 sim-s), alert_max_age (2.0 sim-s; daha eski kareye ait alarm yok sayılır),
+  alert_log_dir (~/.ros/fsb_security),
+  alert_image_topic (/perception/image_annotated; '' = kare kaydetme).
 """
 
+import json
 import math
+import os
 import random
 import time
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import ComputePathToPose, NavigateToPose
 import numpy as np
+from PIL import Image as PilImage
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
+from sensor_msgs.msg import Image
 from tf2_ros import Buffer, TransformListener
+from vision_msgs.msg import Detection2D
 from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 
@@ -63,6 +82,13 @@ class PatrolExecutor(Node):
         self.declare_parameter('seed', 0)
         self.declare_parameter('frame_id', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('react_to_alerts', True)
+        self.declare_parameter('alert_topic', '/security/alerts')
+        self.declare_parameter('alert_hold', 5.0)
+        self.declare_parameter('alert_cooldown', 120.0)
+        self.declare_parameter('alert_max_age', 2.0)
+        self.declare_parameter('alert_log_dir', '~/.ros/fsb_security')
+        self.declare_parameter('alert_image_topic', '/perception/image_annotated')
         gp = self.get_parameter
         self.mode: str = gp('mode').value
         if self.mode not in ('idleness', 'sequential', 'random'):
@@ -117,8 +143,23 @@ class PatrolExecutor(Node):
         self.goal_handle = None
         self.cooldown: Dict[int, int] = {}   # atlanan hedef → kalan bekleme adımı
         self.finished = False
-        self.total = {'visits': 0, 'skips': 0, 'laps_ok': 0}
+        self.total = {'visits': 0, 'skips': 0, 'laps_ok': 0, 'alerts': 0, 'alerts_ignored': 0}
         self.create_timer(1.0, self._watchdog)
+        # Güvenlik alarmı durumu
+        self.alert_hold = float(gp('alert_hold').value)
+        self.alert_cooldown = float(gp('alert_cooldown').value)
+        self.alert_max_age = float(gp('alert_max_age').value)
+        self.alert_log_dir = os.path.expanduser(str(gp('alert_log_dir').value))
+        self.alert_image_topic = str(gp('alert_image_topic').value)
+        self.incident: Optional[Dict[str, Any]] = None   # süren olay
+        self.incident_end = -math.inf                    # son olayın bittiği sim zamanı
+        self.deferred_next = False                       # olay sırasında ertelenen _next()
+        self.alert_marks: List[tuple] = []               # (x, y, metin) — RViz
+        self._img_sub = None
+        if bool(gp('react_to_alerts').value):
+            self.create_subscription(Detection2D, str(gp('alert_topic').value),
+                                     self._on_alert, 10)
+            self.create_timer(0.2, self._incident_tick)
         # RViz: waypoint'ler (yön oku + etiket), durum renkli.
         # Transient-local: geç açılan RViz de son durumu alır.
         self.marker_pub = self.create_publisher(
@@ -139,13 +180,20 @@ class PatrolExecutor(Node):
         ps.pose.orientation.z, ps.pose.orientation.w = math.sin(t.yaw / 2), math.cos(t.yaw / 2)
         return ps
 
-    def _robot_xy(self) -> Optional[tuple]:
+    def _robot_pose(self, timeout: float = 0.5) -> Optional[tuple]:
+        """(x, y, yaw) map çerçevesinde; TF yoksa None."""
         try:
             tr = self.tf_buffer.lookup_transform(self.frame_id, self.base_frame, Time(),
-                                                 timeout=Duration(seconds=0.5))
-            return tr.transform.translation.x, tr.transform.translation.y
+                                                 timeout=Duration(seconds=timeout))
+            q = tr.transform.rotation
+            yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+            return tr.transform.translation.x, tr.transform.translation.y, yaw
         except Exception:  # noqa: BLE001 - TF henüz yok
             return None
+
+    def _robot_xy(self) -> Optional[tuple]:
+        pose = self._robot_pose()
+        return None if pose is None else pose[:2]
 
     def _path_length(self, a: Target, b: Target) -> float:
         g = ComputePathToPose.Goal()
@@ -214,6 +262,18 @@ class PatrolExecutor(Node):
             text.color.r, text.color.g, text.color.b, text.color.a = r, g, b, 1.0
             text.text = tg.name
             arr.markers += [arrow, text]
+        for k, (x, y, label) in enumerate(self.alert_marks[-20:]):
+            for ns, mtype, z, size in (('alert', Marker.SPHERE, 0.15, 0.3),
+                                       ('alert_label', Marker.TEXT_VIEW_FACING, 0.8, 0.3)):
+                mk = Marker()
+                mk.header.frame_id = self.frame_id
+                mk.ns, mk.id, mk.type, mk.action = ns, k, mtype, Marker.ADD
+                mk.pose.position.x, mk.pose.position.y, mk.pose.position.z = x, y, z
+                mk.pose.orientation.w = 1.0
+                mk.scale.x = mk.scale.y = mk.scale.z = size
+                mk.color.r, mk.color.g, mk.color.b, mk.color.a = 1.0, 0.0, 0.0, 0.9
+                mk.text = label
+                arr.markers.append(mk)
         self.marker_pub.publish(arr)
 
     # ------------------------------------------------------------------ akış
@@ -278,6 +338,9 @@ class PatrolExecutor(Node):
         return best
 
     def _next(self) -> None:
+        if self.incident is not None:   # olay bitince _resume() çağırır
+            self.deferred_next = True
+            return
         if len(self.lap_done) == len(self.targets):
             self._finish_lap()
             if self.finished:
@@ -295,11 +358,14 @@ class PatrolExecutor(Node):
         tg = self.targets[i]
         idle = self.now() - tg.last_visit
         self.lap_max_idle = max(self.lap_max_idle, idle)
-        self.goal_idx, self.goal_start = i, self.now()
-        g = NavigateToPose.Goal()
-        g.pose = self._pose(tg)
         self.get_logger().info(f'→ {tg.name} ({tg.x:+.2f}, {tg.y:+.2f}) idleness={idle:.0f} s'
                                + (' [öncelikli]' if tg.priority else ''))
+        self._send_goal(i)
+
+    def _send_goal(self, i: int) -> None:
+        self.goal_idx, self.goal_start = i, self.now()
+        g = NavigateToPose.Goal()
+        g.pose = self._pose(self.targets[i])
         self._publish_markers()
         self.nav.send_goal_async(g).add_done_callback(self._on_accept)
 
@@ -310,11 +376,17 @@ class PatrolExecutor(Node):
             return
         self.goal_handle = gh
         gh.get_result_async().add_done_callback(self._on_result)
+        if self.incident is not None:   # alarm, hedef kabul edilmeden hemen önce geldi
+            gh.cancel_goal_async()
 
     def _on_result(self, fut) -> None:
         res = fut.result()
         self.goal_handle = None
         if self.goal_idx is None:
+            return
+        if self.incident is not None and res.status == GoalStatus.STATUS_CANCELED:
+            # Alarm için bilerek iptal edildi: hedef atlanmaz, _resume() yeniden gönderir
+            self.incident.setdefault('stopped_sim', self.now())
             return
         if res.status == GoalStatus.STATUS_SUCCEEDED:
             i = self.goal_idx
@@ -352,7 +424,111 @@ class PatrolExecutor(Node):
         self._publish_markers()
         self._next()
 
+    # ------------------------------------------------------------------ güvenlik alarmı
+    def _on_alert(self, msg: Detection2D) -> None:
+        if self.lap == 0 or self.finished or not msg.results:
+            return
+        now = self.now()
+        if self.incident is not None or now - self.incident_end < self.alert_cooldown:
+            self.total['alerts_ignored'] += 1
+            return
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if now - stamp > self.alert_max_age:
+            # Kuyrukta beklemiş eski alarm (ör. açılışta Nav2 beklenirken birikenler)
+            self.total['alerts_ignored'] += 1
+            return
+        hyp = msg.results[0].hypothesis
+        pose = self._robot_pose(timeout=0.0)
+        self.total['alerts'] += 1
+        goal = self.targets[self.goal_idx].name if self.goal_idx is not None else None
+        self.incident = {
+            'id': self.total['alerts'], 'wall_time': time.strftime('%Y-%m-%dT%H:%M:%S'),
+            'sim_time': round(now, 3), 'class': hyp.class_id, 'score': round(hyp.score, 4),
+            'bbox_cxcywh': [round(v, 1) for v in (msg.bbox.center.position.x,
+                                                  msg.bbox.center.position.y,
+                                                  msg.bbox.size_x, msg.bbox.size_y)],
+            'detection_stamp': round(stamp, 3),
+            'robot_map_pose': None if pose is None else [round(v, 3) for v in pose],
+            'lap': self.lap, 'goal': goal, 'image': None,
+        }
+        # 1) DUR
+        if self.goal_handle is not None:
+            self.goal_handle.cancel_goal_async()
+        elif self.goal_idx is None:
+            self.incident['stopped_sim'] = now   # zaten hedefsiz
+        # 2) UYAR
+        where = 'konum bilinmiyor' if pose is None else f'robot ({pose[0]:+.2f}, {pose[1]:+.2f})'
+        self.get_logger().warning(
+            f'!!! GÜVENLİK ALARMI #{self.incident["id"]}: {hyp.class_id} güven {hyp.score:.2f} — '
+            f'{where}, hedef {goal}: DEVRİYE DURDURULDU ({self.alert_hold:.0f} sim-s)')
+        if pose is not None:
+            self.alert_marks.append((pose[0], pose[1],
+                                     f'ALARM #{self.incident["id"]} {hyp.class_id} '
+                                     f'{hyp.score:.2f}'))
+            self._publish_markers()
+        # 3) KAYDET (kare): alarm sonrası ilk işaretli kare
+        if self.alert_image_topic and self._img_sub is None:
+            self._img_sub = self.create_subscription(Image, self.alert_image_topic,
+                                                     self._on_alert_image, 1)
+
+    def _on_alert_image(self, msg: Image) -> None:
+        inc = self.incident
+        if inc is None or inc['image'] is not None or msg.encoding not in ('bgr8', 'rgb8'):
+            return
+        try:
+            os.makedirs(self.alert_log_dir, exist_ok=True)
+            a = np.frombuffer(msg.data, np.uint8).reshape(msg.height, msg.step)[:, :msg.width * 3]
+            a = a.reshape(msg.height, msg.width, 3)
+            if msg.encoding == 'bgr8':
+                a = a[..., ::-1]
+            path = os.path.join(self.alert_log_dir,
+                                f'alarm_{time.strftime("%Y%m%d_%H%M%S")}_{inc["id"]:03d}.jpg')
+            PilImage.fromarray(np.ascontiguousarray(a)).save(path, quality=90)
+            inc['image'] = path
+        except Exception as e:  # noqa: BLE001 - kayıt hatası devriyeyi düşürmesin
+            self.get_logger().error(f'alarm karesi kaydedilemedi: {e!r}')
+            inc['image'] = ''
+
+    def _incident_tick(self) -> None:
+        inc = self.incident
+        if inc is None:
+            return
+        now = self.now()
+        if now - inc['sim_time'] < self.alert_hold or self.goal_handle is not None:
+            return   # bekleme sürüyor ya da iptal sonucu henüz gelmedi
+        if self._img_sub is not None:
+            self.destroy_subscription(self._img_sub)
+            self._img_sub = None
+        stopped = inc.pop('stopped_sim', None)
+        # Nav2'nin iptali onaylama süresi (fiziksel durma ayrıca yavaşlama süresi kadar sürer)
+        inc['cancel_latency_s'] = None if stopped is None else round(stopped - inc['sim_time'], 3)
+        inc['resumed_sim_time'] = round(now, 3)
+        inc['image'] = inc['image'] or None
+        try:
+            os.makedirs(self.alert_log_dir, exist_ok=True)
+            with open(os.path.join(self.alert_log_dir, 'events.jsonl'), 'a',
+                      encoding='utf-8') as f:
+                f.write(json.dumps(inc, ensure_ascii=False) + '\n')
+        except OSError as e:
+            self.get_logger().error(f'alarm kaydı yazılamadı: {e!r}')
+        self.incident, self.incident_end = None, now
+        self._resume(inc)
+
+    def _resume(self, inc: Dict[str, Any]) -> None:
+        """4) DEVAM: yarım kalan hedef yeniden gönderilir (ya da ertelenen seçim yapılır)."""
+        deferred, self.deferred_next = self.deferred_next, False
+        tail = f'kayıt: {self.alert_log_dir}/events.jsonl, kare: {inc["image"]}'
+        if self.goal_idx is not None and not deferred:
+            self.get_logger().info(f'Alarm #{inc["id"]} kaydedildi; devriye sürüyor → '
+                                   f'{self.targets[self.goal_idx].name} ({tail})')
+            self._send_goal(self.goal_idx)
+        else:
+            self.get_logger().info(f'Alarm #{inc["id"]} kaydedildi; devriye sürüyor ({tail})')
+            self._next()
+
     def _watchdog(self) -> None:
+        if self.incident is not None:
+            return
         if self.goal_idx is not None and self.goal_handle is not None and \
                 self.now() - self.goal_start > self.goal_timeout:
             self._timed_out = True
@@ -371,7 +547,8 @@ class PatrolExecutor(Node):
             self.finished = True
             self.get_logger().info(
                 f'DEVRİYE BİTTİ: {self.lap} tur, eksiksiz tur {self.total["laps_ok"]}/{self.lap}, '
-                f'toplam ziyaret {self.total["visits"]}, atlama {self.total["skips"]}')
+                f'toplam ziyaret {self.total["visits"]}, atlama {self.total["skips"]}, '
+                f'alarm {self.total["alerts"]} (yok sayılan {self.total["alerts_ignored"]})')
             return
         self._new_lap()
 
@@ -387,8 +564,11 @@ def main(args: Optional[List[str]] = None) -> None:
         node.start()
         while rclpy.ok() and not node.finished:
             rclpy.spin_once(node, timeout_sec=0.1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         node.cancel()
+    except Exception:
+        if rclpy.ok():   # kapanış sırasında (SIGINT) geçersiz bağlam hatası yutulur
+            raise
     finally:
         node.destroy_node()
         if rclpy.ok():
