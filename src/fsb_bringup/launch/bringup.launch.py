@@ -7,6 +7,8 @@ Kullanım:
   ros2 launch fsb_bringup bringup.launch.py use_sim:=false  # gerçek robot (Aşama 7)
   ros2 launch fsb_bringup bringup.launch.py localization:=slam   # haritalama (SLAM Toolbox)
   ros2 launch fsb_bringup bringup.launch.py localization:=amcl   # AMCL + Nav2 (map:=...)
+  ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=10
+      # GUI'li Gazebo + RViz (nav.rviz) + AMCL/Nav2 + devriye, tek komut
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
@@ -24,7 +26,8 @@ from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, Log
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import EqualsSubstitution, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import (EqualsSubstitution, LaunchConfiguration, PathJoinSubstitution,
+                                  PythonExpression)
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -110,10 +113,28 @@ def generate_launch_description() -> LaunchDescription:
     rviz = Node(
         package='rviz2',
         executable='rviz2',
-        arguments=['-d', PathJoinSubstitution(
-            [FindPackageShare('fsb_bringup'), 'rviz', 'sim.rviz'])],
+        arguments=['-d', LaunchConfiguration('rviz_config')],
         parameters=[{'use_sim_time': use_sim_time}],
         condition=IfCondition(LaunchConfiguration('rviz')),
+    )
+
+    # Devriye: yalnızca localization:=amcl iken (FollowWaypoints sunucusu Nav2'de). patrol_node
+    # action sunucusu hazır olana dek kendisi bekler; sabit gecikme yok.
+    patrol_enabled = PythonExpression([
+        "'", LaunchConfiguration('patrol'), "'.lower() == 'true' and '",
+        LaunchConfiguration('localization'), "' == 'amcl'"])
+    patrol = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution(
+            [FindPackageShare('fsb_patrol'), 'launch', 'patrol.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time,
+                          'loops': LaunchConfiguration('loops')}.items(),
+        condition=IfCondition(patrol_enabled),
+    )
+    patrol_ignored = LogInfo(
+        msg='patrol:=true yok sayıldı: devriye için localization:=amcl gerekli.',
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('patrol'), "'.lower() == 'true' and '",
+            LaunchConfiguration('localization'), "' != 'amcl'"])),
     )
 
     return LaunchDescription([
@@ -138,7 +159,21 @@ def generate_launch_description() -> LaunchDescription:
             description='localization:=amcl için harita yaml'),
         DeclareLaunchArgument(
             'rviz', default_value='false',
-            description='true: RViz (scan, kamera, EKF odometrisi)'),
+            description='true: RViz'),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value=PathJoinSubstitution([
+                FindPackageShare('fsb_bringup'), 'rviz',
+                PythonExpression(["'sim.rviz' if '", LaunchConfiguration('localization'),
+                                  "' == 'none' else 'nav.rviz'"])]),
+            description='RViz yapılandırması. Varsayılan: localization:=none → sim.rviz '
+                        '(odom; scan, kamera, EKF), aksi halde nav.rviz (map; harita, AMCL '
+                        "parçacıkları, planlar, costmap'ler)"),
+        DeclareLaunchArgument(
+            'patrol', default_value='false',
+            description='true: fsb_patrol devriyesini de başlat (localization:=amcl gerekli)'),
+        DeclareLaunchArgument(
+            'loops', default_value='0', description='devriye tur sayısı, 0 = sonsuz'),
 
         rsp,
         sim,
@@ -150,4 +185,6 @@ def generate_launch_description() -> LaunchDescription:
         slam,
         nav2,
         rviz,
+        patrol,
+        patrol_ignored,
     ])

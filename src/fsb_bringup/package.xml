@@ -13,6 +13,8 @@
   <exec_depend>fsb_control</exec_depend>
   <exec_depend>fsb_gazebo</exec_depend>
   <exec_depend>fsb_navigation</exec_depend>
+  <exec_depend>fsb_patrol</exec_depend>
+  <exec_depend>nav2_rviz_plugins</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>robot_localization</exec_depend>

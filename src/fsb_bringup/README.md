@@ -22,9 +22,55 @@ servisini bekler (sabit gecikme yok). `rviz:=true` → `rviz/sim.rviz` (LaserSca
 | `use_sim` | `true` | `use_sim_time` buna eşitlenir ve tüm düğümlere iletilir |
 | `world` | `fsb_gazebo/worlds/factory.sdf` | |
 | `headless` | `false` | |
-| `rviz` | `false` | RViz (scan + kamera + EKF) |
+| `rviz` | `false` | RViz aç |
+| `rviz_config` | otomatik | `localization:=none` → `rviz/sim.rviz` (sabit çerçeve `odom`; scan, kamera, EKF); `slam`/`amcl` → `rviz/nav.rviz` (sabit çerçeve `map`) |
+| `patrol` | `false` | `true` → `fsb_patrol` devriyesini de başlat (yalnızca `localization:=amcl`; değilse yok sayılır ve loglanır) |
+| `loops` | `0` | devriye tur sayısı, 0 = sonsuz |
 | `localization` | `none` | `none` / `slam` (slam_toolbox haritalama) / `amcl` (map_server + AMCL + Nav2) |
 | `map` | `fsb_navigation/maps/factory.yaml` | `localization:=amcl` için harita |
+
+## Devriyeyi gözle izleme (GUI'li Gazebo + RViz + AMCL/Nav2 + devriye)
+`rviz/nav.rviz` (sabit çerçeve `map`, üstten görünüm): harita, AMCL parçacıkları (`/particle_cloud`, yeşil oklar),
+robot modeli + LaserScan, global plan (`/plan`, mavi), yerel plan (RPP'nin takip ettiği parça
+`/received_global_plan`, turuncu), global (soluk) ve lokal costmap, lokal costmap footprint'i (yeşil),
+`map/odom/base_footprint` eksenleri, Navigation 2 paneli; araçlar: *2D Pose Estimate*, *Nav2 Goal*.
+
+Her sekmede önce (tüm sekmelerde **aynı** `ROS_DOMAIN_ID`):
+```bash
+cd ~/factory_security_bot_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+export ROS_DOMAIN_ID=85
+```
+
+**Önerilen: iki sekme** (önce robotu ve AMCL'yi görür, devriyeyi sonra başlatırsınız)
+```bash
+# Sekme 1 — Gazebo GUI + RViz (nav.rviz) + EKF + map_server/AMCL + Nav2
+ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true
+
+# Sekme 2 — RViz'de parçacıklar robotun etrafında toplandıktan ve Navigation 2 panelinde
+#           "active" görünce: 10 turluk devriye (bitince "DEVRİYE BİTTİ: x/10")
+ros2 launch fsb_patrol patrol.launch.py use_sim_time:=true loops:=10
+```
+
+**Tek komut** (devriye Nav2 hazır olunca kendiliğinden başlar; `loops:=0` → sonsuz):
+```bash
+ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=10
+```
+
+**İsteğe bağlı sekme 3/4 — ölçüm** (ön planda; Ctrl+C → özet):
+```bash
+ros2 run fsb_gazebo localization_monitor.py --report 300 --ros-args -p use_sim_time:=true
+ros2 run fsb_gazebo recovery_counter.py --ros-args -p use_sim_time:=true
+```
+
+Notlar:
+- Robot (0,0,0)'da doğar ve AMCL başlangıç pozu da budur (`set_initial_pose: true`); *2D Pose Estimate* gerekmez.
+  Yanlış pozdan yakınsamayı izlemek isterseniz RViz'de *2D Pose Estimate* ile bilerek hatalı poz verin.
+- Kapatma: launch sekmesinde Ctrl+C (Gazebo, RViz ve Nav2 birlikte kapanır).
+- WSLg'de Gazebo GUI + RViz birlikte CPU'yu zorlar; RTF düşerse turlar duvar saatinde uzar (sim süresi
+  değişmez, `use_sim_time`). Pencere açılmaz/çökerse: `export LIBGL_ALWAYS_SOFTWARE=1` (yavaş ama çalışır).
+  Gazebo GUI gerekmiyorsa `headless:=true` ile yalnızca RViz'den izleyin.
 
 ## Teleop
 `diff_drive_controller` yalnızca `TwistStamped` kabul eder; teleop_twist_keyboard 2.4.1 `stamped` parametresini destekler (twist_stamper gerekmez):
