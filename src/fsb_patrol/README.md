@@ -59,7 +59,9 @@ ros2 launch fsb_patrol patrol_executor.launch.py use_sim_time:=true mode:=random
 | `nominal_speed` | `0.2` | m/s, idleness skorunda yol süresi tahmini |
 
 Ulaşılamayan / zaman aşan waypoint `✗ ATLANDI ... tur devam ediyor` ile loglanır, tur iptal
-olmaz. Her tur sonunda `Tur k TAMAM (sim/duvar)` özeti, en sonda `DEVRİYE BİTTİ`.
+olmaz. RViz için `/patrol/waypoints` (`visualization_msgs/MarkerArray`, transient-local) yayınlar:
+her hedef için yön oku + etiket; turuncu = şu anki hedef, yeşil = bu turda ziyaret, kırmızı = atlandı,
+mavi = bekliyor, mor = bekleyen öncelikli nokta (`fsb_bringup/rviz/nav.rviz`'de hazır). Her tur sonunda `Tur k TAMAM (sim/duvar)` özeti, en sonda `DEVRİYE BİTTİ`.
 
 ## 3. `coverage_monitor` — gerçek yoldan kapsama
 TF `map→camera_link` pozlarından planlayıcıyla AYNI görüş modeliyle (FOV + menzil + ışın izleme)

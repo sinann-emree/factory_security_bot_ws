@@ -7,8 +7,9 @@ Kullanım:
   ros2 launch fsb_bringup bringup.launch.py use_sim:=false  # gerçek robot (Aşama 7)
   ros2 launch fsb_bringup bringup.launch.py localization:=slam   # haritalama (SLAM Toolbox)
   ros2 launch fsb_bringup bringup.launch.py localization:=amcl   # AMCL + Nav2 (map:=...)
-  ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=10
-      # GUI'li Gazebo + RViz (nav.rviz) + AMCL/Nav2 + devriye, tek komut
+  ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=5
+      # GUI'li Gazebo + RViz (nav.rviz) + AMCL/Nav2 + patrol_executor (idleness), tek komut
+      # patrol_mode:=sequential|random|legacy (legacy = eski 4 noktalı patrol_node)
 
 Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
@@ -118,17 +119,31 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(LaunchConfiguration('rviz')),
     )
 
-    # Devriye: yalnızca localization:=amcl iken (FollowWaypoints sunucusu Nav2'de). patrol_node
+    # Devriye: yalnızca localization:=amcl iken (action sunucuları Nav2'de). Her iki düğüm de
     # action sunucusu hazır olana dek kendisi bekler; sabit gecikme yok.
-    patrol_enabled = PythonExpression([
-        "'", LaunchConfiguration('patrol'), "'.lower() == 'true' and '",
-        LaunchConfiguration('localization'), "' == 'amcl'"])
+    #   patrol_mode idleness|sequential|random → patrol_executor (planlayıcı waypoint'leri)
+    #   patrol_mode legacy                     → eski 4 noktalı patrol_node (fallback)
+    def patrol_cond(legacy: bool) -> IfCondition:
+        return IfCondition(PythonExpression([
+            "'", LaunchConfiguration('patrol'), "'.lower() == 'true' and '",
+            LaunchConfiguration('localization'), "' == 'amcl' and '",
+            LaunchConfiguration('patrol_mode'), "' ", '==' if legacy else '!=', " 'legacy'"]))
     patrol = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution(
+            [FindPackageShare('fsb_patrol'), 'launch', 'patrol_executor.launch.py'])),
+        launch_arguments={'use_sim_time': use_sim_time,
+                          'mode': LaunchConfiguration('patrol_mode'),
+                          'loops': LaunchConfiguration('loops'),
+                          'coverage': LaunchConfiguration('coverage'),
+                          'map': LaunchConfiguration('map')}.items(),
+        condition=patrol_cond(legacy=False),
+    )
+    patrol_legacy = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution(
             [FindPackageShare('fsb_patrol'), 'launch', 'patrol.launch.py'])),
         launch_arguments={'use_sim_time': use_sim_time,
                           'loops': LaunchConfiguration('loops')}.items(),
-        condition=IfCondition(patrol_enabled),
+        condition=patrol_cond(legacy=True),
     )
     patrol_ignored = LogInfo(
         msg='patrol:=true yok sayıldı: devriye için localization:=amcl gerekli.',
@@ -173,7 +188,14 @@ def generate_launch_description() -> LaunchDescription:
             'patrol', default_value='false',
             description='true: fsb_patrol devriyesini de başlat (localization:=amcl gerekli)'),
         DeclareLaunchArgument(
+            'patrol_mode', default_value='idleness',
+            choices=['idleness', 'sequential', 'random', 'legacy'],
+            description='patrol_executor modu; legacy = eski 4 noktalı patrol_node'),
+        DeclareLaunchArgument(
             'loops', default_value='0', description='devriye tur sayısı, 0 = sonsuz'),
+        DeclareLaunchArgument(
+            'coverage', default_value='false',
+            description='true: coverage_monitor da başlar (patrol_executor ile)'),
 
         rsp,
         sim,
@@ -186,5 +208,6 @@ def generate_launch_description() -> LaunchDescription:
         nav2,
         rviz,
         patrol,
+        patrol_legacy,
         patrol_ignored,
     ])

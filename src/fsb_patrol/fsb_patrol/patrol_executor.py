@@ -29,9 +29,15 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
+
+# RViz renkleri (r, g, b): sıradaki hedef / bu turda ziyaret / atlandı / bekliyor / öncelikli
+COLORS = {'goal': (1.0, 0.55, 0.0), 'visited': (0.15, 0.75, 0.25), 'skipped': (0.9, 0.1, 0.1),
+          'pending': (0.15, 0.45, 0.95), 'priority': (0.6, 0.2, 0.8)}
 
 
 class Target:
@@ -113,6 +119,13 @@ class PatrolExecutor(Node):
         self.finished = False
         self.total = {'visits': 0, 'skips': 0, 'laps_ok': 0}
         self.create_timer(1.0, self._watchdog)
+        # RViz: waypoint'ler (yön oku + etiket), durum renkli.
+        # Transient-local: geç açılan RViz de son durumu alır.
+        self.marker_pub = self.create_publisher(
+            MarkerArray, 'patrol/waypoints',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                       reliability=ReliabilityPolicy.RELIABLE))
+        self._publish_markers()
 
     # ------------------------------------------------------------------ yardımcılar
     def now(self) -> float:
@@ -169,6 +182,40 @@ class PatrolExecutor(Node):
         np.fill_diagonal(d, 0.0)
         self.dist = d
 
+    def _publish_markers(self) -> None:
+        arr = MarkerArray()
+        skipped = set(self.lap_skipped)
+        visited = set(self.lap_visited)
+        for k, tg in enumerate(self.targets):
+            if k == self.goal_idx:
+                state = 'goal'
+            elif tg.name in skipped:
+                state = 'skipped'
+            elif tg.name in visited:
+                state = 'visited'
+            else:
+                state = 'priority' if tg.priority else 'pending'
+            r, g, b = COLORS[state]
+            arrow = Marker()
+            arrow.header.frame_id = self.frame_id  # stamp 0 → RViz en güncel TF'i kullanır
+            arrow.ns, arrow.id, arrow.type, arrow.action = 'waypoint', k, Marker.ARROW, Marker.ADD
+            arrow.pose = self._pose(tg).pose
+            big = state == 'goal'
+            arrow.scale.x, arrow.scale.y, arrow.scale.z = (0.6, 0.12, 0.12) if big else \
+                (0.4, 0.07, 0.07)
+            arrow.color.r, arrow.color.g, arrow.color.b, arrow.color.a = r, g, b, 1.0
+            text = Marker()
+            text.header.frame_id = self.frame_id
+            text.ns, text.id, text.type, text.action = 'label', k, Marker.TEXT_VIEW_FACING, \
+                Marker.ADD
+            text.pose.position.x, text.pose.position.y, text.pose.position.z = tg.x, tg.y, 0.5
+            text.pose.orientation.w = 1.0
+            text.scale.z = 0.35 if big else 0.25
+            text.color.r, text.color.g, text.color.b, text.color.a = r, g, b, 1.0
+            text.text = tg.name
+            arr.markers += [arrow, text]
+        self.marker_pub.publish(arr)
+
     # ------------------------------------------------------------------ akış
     def start(self) -> None:
         while not self.nav.wait_for_server(timeout_sec=2.0):
@@ -199,6 +246,7 @@ class PatrolExecutor(Node):
         self.lap_visited, self.lap_skipped = [], []
         self.lap_start_sim, self.lap_start_wall = self.now(), time.monotonic()
         self.lap_max_idle = 0.0
+        self._publish_markers()
         n = len(self.targets)
         if self.mode == 'sequential':
             s = self.start_idx if self.current is None else (self.current + 1) % n
@@ -252,6 +300,7 @@ class PatrolExecutor(Node):
         g.pose = self._pose(tg)
         self.get_logger().info(f'→ {tg.name} ({tg.x:+.2f}, {tg.y:+.2f}) idleness={idle:.0f} s'
                                + (' [öncelikli]' if tg.priority else ''))
+        self._publish_markers()
         self.nav.send_goal_async(g).add_done_callback(self._on_accept)
 
     def _on_accept(self, fut) -> None:
@@ -279,6 +328,7 @@ class PatrolExecutor(Node):
             self.get_logger().info(
                 f'✓ {tg.name} ulaşıldı ({self.now() - self.goal_start:.1f} sim-s)')
             self.goal_idx = None
+            self._publish_markers()
             self._next()
         elif res.status == GoalStatus.STATUS_CANCELED and getattr(self, '_timed_out', False):
             self._timed_out = False
@@ -299,6 +349,7 @@ class PatrolExecutor(Node):
         self.cooldown[i] = 3
         self.get_logger().warning(f'✗ ATLANDI: {tg.name} ({tg.x:+.2f}, {tg.y:+.2f}) — {why}; '
                                   'tur devam ediyor')
+        self._publish_markers()
         self._next()
 
     def _watchdog(self) -> None:
