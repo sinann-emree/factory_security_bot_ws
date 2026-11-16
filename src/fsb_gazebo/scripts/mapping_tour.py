@@ -4,7 +4,7 @@ SLAM haritalaması için factory.sdf dünyasında önceden tanımlı yavaş tur.
 
 Robot EKF tahminine (/odometry/filtered) göre noktadan noktaya sürülür (Nav2 gerekmez).
 Robotun (0, 0, 0)'da spawn edildiği ve EKF'nin oradan başladığı varsayılır (odom = dünya).
-Hız SLAM için düşük: 0.15 m/s, dönüş ≤ 0.4 rad/s (tasarım kuralı).
+Hız SLAM için düşük: 0.15 m/s, dönüş ≤ 0.4 rad/s (hızlı dönüş SLAM haritasını bozar).
 
 Rota (dünya koordinatı, engellerden ≥ 0.3 m boşluk):
   kuzey turu: orta koridor → batı ucu → kuzey dış koridor → doğu ucu → kuzey ara koridor → orta

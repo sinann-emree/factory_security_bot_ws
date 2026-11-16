@@ -32,7 +32,7 @@
 ## Öne çıkan özellikler
 
 Aşağıdaki tüm sayılar simülasyonda (Gazebo Harmonic, 20×14 m fabrika dünyası) ölçülmüştür;
-kaynakları ilgili commit mesajlarıdır.
+kaynakları geliştirme sırasında alınan ölçümler ve commit geçmişidir.
 
 ### Sim/real uyumlu ros2_control mimarisi
 - Tek URDF/xacro; `use_sim` argümanı yalnızca donanım eklentisini değiştirir

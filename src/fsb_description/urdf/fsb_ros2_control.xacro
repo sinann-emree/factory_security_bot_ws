@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-  fsb_ros2_control.xacro — ros2_control donanım tanımı (tasarım kuralı).
+  fsb_ros2_control.xacro — ros2_control donanım tanımı (use_sim argümanı yalnızca donanım eklentisini seçer).
   use_sim=true  → gz_ros2_control/GazeboSimSystem
                   (kurulu sürümden doğrulandı: /opt/ros/jazzy/share/gz_ros2_control/gz_hardware_plugins.xml)
   use_sim=false → gerçek robot donanım arayüzü — PLACEHOLDER, Aşama 7'de fsb_hardware paketiyle doldurulacak.

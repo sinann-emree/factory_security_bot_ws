@@ -1,7 +1,8 @@
 """
 URDF ↔ controllers.yaml tutarlılığı ve fiziksel geçerlilik testleri.
 
-tasarım kuralı ve Aşama 2 kararlarını build testinde zorlar.
+Proje tasarım kurallarını build testinde zorlar: LiDAR 180° dönük montaj, fiziksel
+parametrelerin URDF ↔ controller arasında birebir tutarlılığı ve geçerli atalet matrisleri.
 """
 
 import math

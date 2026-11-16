@@ -1,15 +1,15 @@
-# ekf.yaml — robot_localization ekf_node (tasarım kuralı)
+# ekf.yaml — robot_localization ekf_node (tekerlek odometrisi + IMU füzyonu, yaw drift'ini azaltmak için)
 # Kurulu sürüm: ros-jazzy-robot-localization 3.8.3
 #
-# TF sahipliği (tasarım kuralı): odom→base_footprint YALNIZCA bu düğüm (publish_tf: true);
+# TF sahipliği (proje tasarım kuralı: her TF kenarının tek yayıncısı olur): odom→base_footprint YALNIZCA bu düğüm (publish_tf: true);
 # diff_drive_controller enable_odom_tf: false (fsb_control/config/controllers.yaml).
-# use_sim_time burada YOK: launch'tan tek noktadan verilir (kural 9).
+# use_sim_time burada YOK: launch'tan tek noktadan verilir (proje tasarım kuralı).
 #
 # Füzyon tasarımı:
 # - Tekerlek odometrisi: vx, vy (diferansiyel sürüşte vy=0 → yanal kayma kısıtı), vyaw.
 # - IMU: YALNIZCA vyaw (açısal hız z). Mutlak yaw KULLANILMAZ:
 #     * Gazebo IMU yönelimi fiilen ground truth'tur → drift testini yapay olarak mükemmel gösterir;
-#     * gerçek robotta manyetometre yoksa mutlak yaw güvenilmez (Skill 6 notu);
+#     * gerçek robotta manyetometre yoksa mutlak yaw güvenilmez;
 #     * sim ve gerçekte AYNI konfigürasyon (temel mimari hedef).
 #   IMU açısal hız kovaryansı (gyro stddev 0.001 rad/s → 1e-6) tekerlek vyaw kovaryansından (0.01)
 #   çok küçük olduğundan yaw hızında IMU baskın olur ("yaw için IMU'ya güven artırılır").

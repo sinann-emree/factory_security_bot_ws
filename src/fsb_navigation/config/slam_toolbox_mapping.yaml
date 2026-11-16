@@ -1,9 +1,9 @@
 # slam_toolbox_mapping.yaml — SLAM Toolbox online async, haritalama modu
 # Kurulu sürüm: ros-jazzy-slam-toolbox 2.8.5 (lifecycle düğümü; fsb_navigation/launch/slam.launch.py yönetir)
 # Parametre adları kurulu /opt/ros/jazzy/share/slam_toolbox/config/mapper_params_online_async.yaml ile doğrulandı.
-# use_sim_time burada YOK: launch'tan tek noktadan verilir (tasarım kuralı).
+# use_sim_time burada YOK: launch'tan tek noktadan verilir (proje tasarım kuralı).
 #
-# TF (kural 11): map→odom'u haritalamada YALNIZCA slam_toolbox yayınlar; AMCL bu modda çalışmaz.
+# TF (her kenarın tek yayıncısı olur): map→odom'u haritalamada YALNIZCA slam_toolbox yayınlar; AMCL bu modda çalışmaz.
 
 slam_toolbox:
   ros__parameters:
@@ -14,7 +14,7 @@ slam_toolbox:
     ceres_dogleg_type: TRADITIONAL_DOGLEG
     ceres_loss_function: None
 
-    # --- Çerçeveler / topic (tasarım kuralı) ---
+    # --- Çerçeveler / topic ---
     odom_frame: odom
     map_frame: map
     base_frame: base_footprint

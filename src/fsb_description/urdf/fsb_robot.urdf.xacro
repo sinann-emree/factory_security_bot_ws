@@ -3,7 +3,7 @@
   fsb_robot.urdf.xacro — Fabrika güvenlik robotu (Andino ölçülerinde diferansiyel sürüş)
   Argüman:
     use_sim (bool, varsayılan false): true → gz_ros2_control/GazeboSimSystem + Gazebo eklentisi
-  TF ağacı (tasarım kuralı):
+  TF ağacı (her kenarın tek yayıncısı olur):
     base_footprint → base_link → {left_wheel_link, right_wheel_link, caster_link,
                                   lidar_link, camera_link, imu_link}
   Tüm sayısal değerler: fsb_properties.xacro (tek kaynak).

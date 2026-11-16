@@ -3,8 +3,8 @@
   fsb_sensors.xacro — LiDAR, kamera, IMU linkleri ve joint'leri.
   Konum/ölçüler: fsb_properties.xacro.
   Gazebo sensör tanımları (Aşama 4) yalnızca use_sim=true iken eklenir.
-  <gz_frame_id> = URDF link adı (tasarım kuralı): mesaj frame_id'leri TF ile birebir.
-  Gazebo topic adları açıkça verilir ve fsb_gazebo/config/gz_bridge.yaml'da ROS'a eşlenir (kural 15).
+  <gz_frame_id> = URDF link adı: mesaj frame_id'leri TF ile birebir.
+  Gazebo topic adları açıkça verilir ve fsb_gazebo/config/gz_bridge.yaml'da ROS'a eşlenir (açık topic adlandırması).
   Not: URDF→SDF dönüşümünde sabit joint'li linkler base_link'e birleştirilir; sensör pozları
   korunur, frame_id'yi gz_frame_id belirler.
 -->
@@ -27,7 +27,7 @@
   <joint name="lidar_joint" type="fixed">
     <parent link="base_link"/>
     <child link="lidar_link"/>
-    <!-- 180° dönük montaj (tasarım kuralı): rpy="0 0 3.14159265" -->
+    <!-- 180° dönük montaj (fiziksel montaj yönü): rpy="0 0 3.14159265" -->
     <origin xyz="${lidar_xyz}" rpy="${lidar_rpy}"/>
   </joint>
 

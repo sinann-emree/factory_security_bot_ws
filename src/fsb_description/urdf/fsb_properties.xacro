@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-  fsb_properties.xacro — FİZİKSEL PARAMETRELERİN TEK KAYNAĞI (tasarım kuralı)
+  fsb_properties.xacro — FİZİKSEL PARAMETRELERİN TEK KAYNAĞI (proje tasarım kuralı: controller parametreleri bu değerlerle birebir)
 
   Referans: ~/reference/andino @ 974264b (Ekumen-OS/andino, main). Yalnızca ölçü kaynağı;
   andino dosyaları kopyalanmadı. Aşağıda "andino <dosya>:<satır>" = değerin kaynağı.
@@ -71,7 +71,7 @@
   <xacro:property name="caster_z" value="${caster_radius - base_link_height}"/>
 
   <!-- ============================ SENSÖRLER =========================== -->
-  <!-- LiDAR (RPLidar A1): andino sensors.yaml:2-8; 180° dönük montaj (tasarım kuralı,
+  <!-- LiDAR (RPLidar A1): andino sensors.yaml:2-8; 180° dönük montaj (fiziksel montaj yönü,
        andino common_sensors.urdf.xacro:45'te de rpy 0 0 π) -->
   <xacro:property name="lidar_mass"   value="0.1"/>    <!-- andino sensors.yaml:2 -->
   <xacro:property name="lidar_radius" value="0.015"/>  <!-- andino sensors.yaml:3 -->

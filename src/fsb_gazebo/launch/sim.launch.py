@@ -52,7 +52,7 @@ def generate_launch_description() -> LaunchDescription:
         gz_gui,
         gz_headless,
 
-        # /clock köprüsü — tek /clock kaynağı (tasarım kuralı)
+        # /clock köprüsü — tek /clock kaynağı
         Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',

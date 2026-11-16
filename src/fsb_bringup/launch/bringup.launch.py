@@ -15,7 +15,7 @@ Başlatma sırası:
   robot_state_publisher → (sim) Gazebo + bridge + spawn → joint_state_broadcaster spawner
   → (OnProcessExit) diff_drive_controller spawner → (OnProcessExit) EKF (robot_localization)
   [+ isteğe bağlı RViz]
-use_sim_time = use_sim (tek noktadan, tasarım kuralı).
+use_sim_time = use_sim (proje tasarım kuralı: use_sim_time tek noktadan, launch argümanıyla yönetilir).
 TF: odom→base_footprint yalnızca EKF (diff_drive enable_odom_tf: false).
     map→odom yalnızca SLAM Toolbox (localization:=slam) VEYA AMCL (localization:=amcl), asla ikisi.
 cmd_vel: diff_drive_controller ~/cmd_vel → /cmd_vel (Nav2 collision_monitor çıkışı, teleop).
@@ -201,7 +201,7 @@ def generate_launch_description() -> LaunchDescription:
         sim,
         real_placeholder,
         jsb_spawner,
-        # Sıra: broadcaster aktif olduktan sonra diff_drive (Skill 4 adım 4)
+        # Sıra: broadcaster aktif olduktan sonra diff_drive
         RegisterEventHandler(OnProcessExit(target_action=jsb_spawner, on_exit=[ddc_spawner])),
         RegisterEventHandler(OnProcessExit(target_action=ddc_spawner, on_exit=[ekf])),
         slam,

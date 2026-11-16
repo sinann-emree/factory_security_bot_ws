@@ -9,7 +9,7 @@
 #   → yazılmadı; yazılmayan sınır = NaN = sınırsız.
 # - Doğrulama kuralları: min_velocity <= 0, max_acceleration >= 0, max_deceleration <= 0.
 #
-# use_sim_time burada YOK: launch argümanından tek noktadan verilir (tasarım kuralı).
+# use_sim_time burada YOK: launch argümanından tek noktadan verilir (proje tasarım kuralı).
 
 controller_manager:
   ros__parameters:
@@ -27,7 +27,7 @@ diff_drive_controller:
     right_wheel_names: ["right_wheel_joint"]
 
     # --- Fiziksel değerler: fsb_description/urdf/fsb_properties.xacro ile BİREBİR ---
-    # (tasarım kuralı; fsb_description test_params_consistency.py ile build testinde zorlanır)
+    # (proje tasarım kuralı: fiziksel parametreler tek kaynakta, controller ile birebir; fsb_description test_params_consistency.py ile build testinde zorlanır)
     wheel_separation: 0.128   # = fsb_properties.xacro wheel_separation (andino motor.yaml:8 + wheel.yaml:7)
     wheel_radius: 0.0331      # = fsb_properties.xacro wheel_radius     (andino wheel.yaml:2)
     # Kalibrasyon çarpanları: Aşama 7'ye kadar 1.0
@@ -35,7 +35,7 @@ diff_drive_controller:
     left_wheel_radius_multiplier: 1.0
     right_wheel_radius_multiplier: 1.0
 
-    # --- Odometri / TF (tasarım kuralı) ---
+    # --- Odometri / TF (proje tasarım kuralı: her TF kenarının tek yayıncısı olur) ---
     odom_frame_id: odom
     base_frame_id: base_footprint
     enable_odom_tf: false     # odom→base_footprint TF'ini EKF yayınlar (Aşama 4) — tek sahiplik
@@ -50,7 +50,7 @@ diff_drive_controller:
 
     # --- Hız/ivme sınırları ---
     # andino'da sınır yok (andino_controllers.yaml:25-43 hepsi kapalı) → proje seçimi, Nav2 ile Aşama 5'te ayarlanır.
-    # 0.3 m/s ≈ 9.1 rad/s tekerlek (r=0.0331). Açısal 1.0 rad/s: SLAM için hızlı dönüşten kaçın (tasarım kuralı).
+    # 0.3 m/s ≈ 9.1 rad/s tekerlek (r=0.0331). Açısal 1.0 rad/s: SLAM için hızlı dönüşten kaçın (dönüş hızı harita bozulmasını artırır).
     linear.x.max_velocity: 0.3
     linear.x.min_velocity: -0.3
     linear.x.max_acceleration: 0.5

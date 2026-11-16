@@ -1,5 +1,5 @@
-# gz_bridge.yaml — ros_gz_bridge parameter_bridge config_file (tasarım kuralı)
-# /clock YALNIZCA buradan köprülenir (tasarım kuralı).
+# gz_bridge.yaml — ros_gz_bridge parameter_bridge config_file (köprüler yaml'da tanımlanır, Gazebo topic adları açıkça ROS adlarına eşlenir)
+# /clock YALNIZCA buradan köprülenir (proje tasarım kuralı: tek /clock kaynağı).
 # Sensör topic'leri: Gazebo adları URDF <sensor><topic> ile açıkça verilir (fsb_sensors.xacro),
 # frame_id'ler <gz_frame_id> ile URDF link adlarıdır. Zaman damgaları sim zamanı (/clock).
 
