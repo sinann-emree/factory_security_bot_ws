@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!--
+  fsb_sensors.xacro — LiDAR, kamera, IMU linkleri ve joint'leri.
+  Konum/ölçüler: fsb_properties.xacro.
+  Gazebo sensör tanımları (gpu_lidar, camera, imu) Aşama 4'te eklenecek;
+  o aşamada sensör <gz_frame_id> değerleri buradaki link adlarıyla birebir eşleşmelidir.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================== LiDAR ============================== -->
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_length}"/></geometry>
+      <material name="fsb_black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_length}"/></geometry>
+    </collision>
+    <xacro:cylinder_z_inertial m="${lidar_mass}" r="${lidar_radius}" l="${lidar_length}"/>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <!-- 180° dönük montaj (tasarım kuralı): rpy="0 0 3.14159265" -->
+    <origin xyz="${lidar_xyz}" rpy="${lidar_rpy}"/>
+  </joint>
+
+  <!-- ============================== Kamera ============================= -->
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="${camera_size} ${camera_size} ${camera_size}"/></geometry>
+      <material name="fsb_orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="${camera_size} ${camera_size} ${camera_size}"/></geometry>
+    </collision>
+    <xacro:box_inertial m="${camera_mass}" x="${camera_size}" y="${camera_size}" z="${camera_size}">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${camera_xyz}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- =============================== IMU =============================== -->
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="${imu_size} ${imu_size} ${imu_size / 2.0}"/></geometry>
+      <material name="fsb_grey"/>
+    </visual>
+    <xacro:box_inertial m="${imu_mass}" x="${imu_size}" y="${imu_size}" z="${imu_size / 2.0}">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <!-- Dönme ekseni üzerinde (x=y=0); gerekçe fsb_properties.xacro -->
+    <origin xyz="${imu_xyz}" rpy="0 0 0"/>
+  </joint>
+
+</robot>

@@ -9,6 +9,20 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <!-- use_sim:=true iken URDF gz_ros2_control eklentisini ve fsb_control/config/controllers.yaml'ı kullanır -->
+  <exec_depend>gz_ros2_control</exec_depend>
+  <exec_depend>fsb_control</exec_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>python3-yaml</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

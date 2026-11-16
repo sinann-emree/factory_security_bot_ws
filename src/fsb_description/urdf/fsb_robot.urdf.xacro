@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<!--
+  fsb_robot.urdf.xacro — Fabrika güvenlik robotu (Andino ölçülerinde diferansiyel sürüş)
+  Argüman:
+    use_sim (bool, varsayılan false): true → gz_ros2_control/GazeboSimSystem + Gazebo eklentisi
+  TF ağacı (tasarım kuralı):
+    base_footprint → base_link → {left_wheel_link, right_wheel_link, caster_link,
+                                  lidar_link, camera_link, imu_link}
+  Tüm sayısal değerler: fsb_properties.xacro (tek kaynak).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="fsb_robot">
+
+  <xacro:arg name="use_sim" default="false"/>
+  <xacro:property name="use_sim" value="$(arg use_sim)"/>
+
+  <xacro:include filename="$(find fsb_description)/urdf/fsb_properties.xacro"/>
+
+  <!-- ============================ MALZEMELER =========================== -->
+  <material name="fsb_blue"><color rgba="0.15 0.35 0.75 1.0"/></material>
+  <material name="fsb_black"><color rgba="0.1 0.1 0.1 1.0"/></material>
+  <material name="fsb_grey"><color rgba="0.6 0.6 0.6 1.0"/></material>
+  <material name="fsb_orange"><color rgba="1.0 0.5 0.0 1.0"/></material>
+
+  <!-- ========================== ATALET MAKROLARI =======================
+       Homojen katı cisim formülleri; sonuç her zaman pozitif tanımlı ve üçgen eşitsizliğini sağlar. -->
+  <xacro:macro name="box_inertial" params="m x y z *origin">
+    <inertial>
+      <xacro:insert_block name="origin"/>
+      <mass value="${m}"/>
+      <inertia ixx="${m / 12.0 * (y * y + z * z)}" ixy="0.0" ixz="0.0"
+               iyy="${m / 12.0 * (x * x + z * z)}" iyz="0.0"
+               izz="${m / 12.0 * (x * x + y * y)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Ekseni link'in y ekseni boyunca olan silindir (tekerlek) -->
+  <xacro:macro name="cylinder_y_inertial" params="m r l">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${m}"/>
+      <inertia ixx="${m * (3 * r * r + l * l) / 12.0}" ixy="0.0" ixz="0.0"
+               iyy="${m * r * r / 2.0}" iyz="0.0"
+               izz="${m * (3 * r * r + l * l) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Ekseni link'in z ekseni boyunca olan silindir (LiDAR) -->
+  <xacro:macro name="cylinder_z_inertial" params="m r l">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${m}"/>
+      <inertia ixx="${m * (3 * r * r + l * l) / 12.0}" ixy="0.0" ixz="0.0"
+               iyy="${m * (3 * r * r + l * l) / 12.0}" iyz="0.0"
+               izz="${m * r * r / 2.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="sphere_inertial" params="m r">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${m}"/>
+      <inertia ixx="${2.0 * m * r * r / 5.0}" ixy="0.0" ixz="0.0"
+               iyy="${2.0 * m * r * r / 5.0}" iyz="0.0"
+               izz="${2.0 * m * r * r / 5.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ========================== base_footprint ========================= -->
+  <!-- Zemindeki sanal çerçeve; kök link (inertial yok — KDL kök atalet uyarısını önler). -->
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <!-- Zemin teması: base_link_height = wheel_radius (hesap: fsb_properties.xacro) -->
+    <origin xyz="0 0 ${base_link_height}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ============================ base_link ============================ -->
+  <!-- Orijin: tekerlek mili orta noktası (dönme merkezi). -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="${chassis_cx} 0 ${chassis_cz}" rpy="0 0 0"/>
+      <geometry><box size="${chassis_x} ${chassis_y} ${chassis_z}"/></geometry>
+      <material name="fsb_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="${chassis_cx} 0 ${chassis_cz}" rpy="0 0 0"/>
+      <geometry><box size="${chassis_x} ${chassis_y} ${chassis_z}"/></geometry>
+    </collision>
+    <xacro:box_inertial m="${body_mass}" x="${chassis_x}" y="${chassis_y}" z="${body_z}">
+      <origin xyz="${body_com_x} 0 ${body_com_z}" rpy="0 0 0"/>
+    </xacro:box_inertial>
+  </link>
+
+  <!-- ============================ TEKERLEKLER ========================== -->
+  <!-- Eksen 0 1 0 (her iki tekerlek): pozitif hız → +x yönünde ilerleme.
+       v_merkez = ω ŷ × (r ẑ) = ω r x̂  (temas noktasından merkeze vektör r ẑ). -->
+  <xacro:macro name="wheel" params="side reflect">
+    <link name="${side}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${PI / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="fsb_black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${PI / 2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+      <xacro:cylinder_y_inertial m="${wheel_mass}" r="${wheel_radius}" l="${wheel_width}"/>
+    </link>
+
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel_link"/>
+      <!-- y = ±wheel_separation/2, z = 0 (mil base_link yüksekliğinde → alt nokta zeminde) -->
+      <origin xyz="0 ${reflect * wheel_separation / 2.0} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+
+    <gazebo reference="${side}_wheel_link">
+      <mu1>${wheel_mu}</mu1>
+      <mu2>${wheel_mu}</mu2>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:wheel side="left"  reflect="1"/>
+  <xacro:wheel side="right" reflect="-1"/>
+
+  <!-- ============================== CASTER ============================= -->
+  <!-- Sabit küre (andino use_fixed_caster=True varsayılanı gibi), düşük sürtünme. -->
+  <link name="caster_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+      <material name="fsb_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="${caster_radius}"/></geometry>
+    </collision>
+    <xacro:sphere_inertial m="${caster_mass}" r="${caster_radius}"/>
+  </link>
+
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_link"/>
+    <!-- Küre alt noktası zeminde: hesap fsb_properties.xacro (caster_z) -->
+    <origin xyz="${caster_x} 0 ${caster_z}" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="caster_link">
+    <mu1>${caster_mu}</mu1>
+    <mu2>${caster_mu}</mu2>
+  </gazebo>
+
+  <!-- ============================ SENSÖRLER ============================ -->
+  <xacro:include filename="$(find fsb_description)/urdf/fsb_sensors.xacro"/>
+
+  <!-- ========================== ros2_control =========================== -->
+  <xacro:include filename="$(find fsb_description)/urdf/fsb_ros2_control.xacro"/>
+
+</robot>

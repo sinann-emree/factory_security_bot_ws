@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  fsb_ros2_control.xacro — ros2_control donanım tanımı (tasarım kuralı).
+  use_sim=true  → gz_ros2_control/GazeboSimSystem
+                  (kurulu sürümden doğrulandı: /opt/ros/jazzy/share/gz_ros2_control/gz_hardware_plugins.xml)
+  use_sim=false → gerçek robot donanım arayüzü — PLACEHOLDER, Aşama 7'de fsb_hardware paketiyle doldurulacak.
+  Üst katman (controller'lar, Nav2, SLAM) iki durumda da aynıdır.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <ros2_control name="fsb_system" type="system">
+    <hardware>
+      <xacro:if value="${use_sim}">
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </xacro:if>
+      <xacro:unless value="${use_sim}">
+        <!-- TODO(Aşama 7): gerçek donanım eklentisi. Bu sınıf henüz YOK; use_sim:=false ile
+             controller_manager başlatılırsa yükleme hatası verir (beklenen). -->
+        <plugin>fsb_hardware/FsbSystemHardware</plugin>
+      </xacro:unless>
+    </hardware>
+
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <xacro:if value="${use_sim}">
+    <gazebo>
+      <!-- Dosya/sınıf adı kurulu sürümden doğrulandı:
+           /opt/ros/jazzy/lib/libgz_ros2_control-system.so → gz_ros2_control::GazeboSimROS2ControlPlugin -->
+      <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find fsb_control)/config/controllers.yaml</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+</robot>
