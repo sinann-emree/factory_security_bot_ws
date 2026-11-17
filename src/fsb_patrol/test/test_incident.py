@@ -2,17 +2,16 @@
 
 import math
 
-import numpy as np
-
 from fsb_patrol import incident_geometry as geo
 from fsb_patrol.watchlist import Watchlist
+import numpy as np
 
 LIDAR = (0.0, 0.0, math.pi)   # 180° dönük montaj
 CAM = (0.06, 0.0, 0.0)
 
 
 def scan_with(obstacles, n=360, far=10.0):
-    """Base çerçevesindeki (x, y, yarıçap) dairelerinden 360 ışınlı tarama (LiDAR çerçevesi)."""
+    """Tarama üretir: base'deki (x, y, yarıçap) dairelerinden 360 ışın (LiDAR çerçevesi)."""
     ranges = np.full(n, far)
     for k in range(n):
         a = -math.pi + 2 * math.pi * k / n + LIDAR[2]       # ışının base'deki yönü
