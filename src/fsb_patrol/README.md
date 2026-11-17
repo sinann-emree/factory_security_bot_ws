@@ -70,11 +70,20 @@ Alarm **yalnızca yerde yatan insan** içindir (ayakta/yürüyen insan ve hareke
 `incident_geometry.py`, `watchlist.py`):
 
 1. **Konum** — kişinin `map` konumu hesaplanır: tespit kutusunun yatay açı aralığına düşen LiDAR
-   ışınlarından en yakın küme (`method: lidar`). LiDAR ışını yoksa kutunun alt kenarından zemin
-   düzlemi ışını (`method: ground`; kamera yere çok yakın olduğu için kaba, yalnızca yedek).
-2. **Birleştir** — konum etkin bir kaydın `merge_radius` (1 m) içindeyse aynı kişidir: yeni kayıt
-   açılmaz, bildirim yinelenmez, devriye durmaz (yalnızca `last_seen` güncellenir). Böylece listedeki
-   kişi sıradan devriye sırasında her görüldüğünde yeniden alarm üretmez.
+   noktalarından en yakın bağlantılı küme (komşu aralığı ≤ 0.3 m); konum kümenin ortasıdır, küme
+   noktaları gövdenin görünen kısmı (`extent`) olarak saklanır (`method: lidar`). LiDAR noktası yoksa
+   kutunun alt kenarından zemin düzlemi ışını (`method: ground_ray`; kamera yere çok yakın olduğu
+   için menzili güvenilmez, yalnızca yedek).
+2. **Birleştir** — konum etkin bir kaydın merkezine **ya da bilinen gövde noktalarına**
+   `merge_radius` (1 m) içindeyse aynı kişidir: yeni kayıt açılmaz, bildirim yinelenmez, devriye
+   durmaz (yalnızca `last_seen` güncellenir). Gövde ~1.7 m uzunluğunda olduğundan yalnızca merkeze
+   bakmak aynı kişinin iki ucunu ayrı kişi sayıyordu (ölçüm: 9 kişide 3 çift kayıt). Zemin ışını
+   konumlarında menzil yerine bakış doğrultusu kullanılır: doğrultu üzerinde bilinen kişi varsa
+   odur. Böylece listedeki kişi sıradan devriyede her görüldüğünde yeniden alarm üretmez.
+   Uzak tespit (`add_max_range`, 6.5 m ötesi) yeni kayıt açmaz: o uzaklıkta kutu–LiDAR eşlemesi
+   güvenilmezdir (ölçüm: 10 m'den 2.7 m hatalı konum); devriye yaklaşınca kişi yeniden görülür.
+   Kayıtta hiçbir açıdan doğrulanamamış bir kaydın `unconfirmed_merge_radius` (2 m) yakınındaki
+   yeni tespit, yeni kayıt açmak yerine o kaydı yeni konuma taşır ve kaydı yineler.
 3. **Ekle + bildir (bir kez)** — yeni kişi listeye eklenir, `!!! YATAN İNSAN #n` WARN logu, RViz'de
    kırmızı küre + `YATAN #n (doğrulama k)` etiketi (`/patrol/waypoints`, `alert` ad alanı).
 4. **Kayıt görevi** — etkin devriye hedefi iptal edilir; kişinin çevresinde `inspect_radius`
@@ -84,6 +93,12 @@ Alarm **yalnızca yerde yatan insan** içindir (ayakta/yürüyen insan ve hareke
    (kutu, güven, gövde açısı, anahtar noktalar) saklanır. Kayıt sırasında toplanan konumların
    medyanıyla kişinin konumu inceltilir. Ulaşılamayan bakış noktası atlanır, sıradaki denenir.
 5. **Devam** — devriye kaldığı hedeften sürer (hedef atlanmış sayılmaz).
+   **Yasak bölge:** kayıt etkin olduğu sürece kişinin çevresi (`keepout_radius`, 1 m) Nav2
+   costmap'lerine engel olarak bildirilir (`/security/keepout`, `PointCloud2`, 1 Hz;
+   `fsb_navigation` `nav2_params.yaml` → `obstacle_layer.keepout`). Gerekçe: LiDAR düzlemi
+   (zeminden ~11 cm) yatan gövdenin yalnızca bir kısmını görür; yasak bölge olmadan bir denemede
+   robot, kayıt sırasında kişi ile raf arasından geçerken gövdeye sıkıştı. Bölge içinde kalan
+   devriye noktaları kayıt çözülene dek atlanır.
 6. **Revisit** — `revisit_interval` sim-s sonra (bir sonraki hedef arasında) konumu gören bir bakış
    noktasına gidilir:
    - **hâlâ yerde** (≥ `observe_min_hits` karede konumun yakınında yatan insan) → bildirim yenilenir
@@ -101,7 +116,7 @@ yeniden başlatmada etkin kayıtlar yüklenir), `events.jsonl` (`added`, `observ
 doğrulaması), `wl<id>_*.jpg`.
 Kayıt alanları: `id`, `x`, `y` (map), `status` (`active`/`resolved`), `first_seen_wall`,
 `first_seen_sim`, `last_seen_sim`, `confirmations`, `notifications`, `images`, `observations`,
-`revisits`, `next_revisit_sim`, `resolved_wall`.
+`revisits`, `next_revisit_sim`, `resolved_wall`, `extent`.
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
@@ -116,6 +131,10 @@ Kayıt alanları: `id`, `x`, `y` (map), `status` (`active`/`resolved`), `first_s
 | `observe_time` / `observe_settle` | `4.0` / `1.0` | sim-s; bakış noktasında sayım süresi / öncesinde bekleme |
 | `observe_min_hits` | `3` | "görüldü / hâlâ yerde" için gereken yatan-insan karesi |
 | `revisit_interval` | `300.0` | sim-s; kayıt ya da doğrulamadan sonraki revisit (launch argümanı da var) |
+| `add_max_range` | `6.5` | m; bundan uzaktan konumlanan tespit yeni kayıt açmaz |
+| `unconfirmed_merge_radius` | `2.0` | m; doğrulanamamış kaydı yeni tespitle taşıma yarıçapı |
+| `keepout_radius` | `1.0` | m; etkin kaydın çevresindeki costmap yasak bölgesi (`0` = kapalı) |
+| `keepout_topic` | `/security/keepout` | |
 | `revisit_retry` | `60.0` | sim-s; görüş doğrulanamayınca yeniden deneme |
 | `view_max_range` | `4.0` | m; "çözüldü" doğrulaması için kamera–konum üst uzaklığı |
 | `scan_topic`, `camera_info_topic`, `costmap_topic`, `camera_frame`, `lidar_frame` | bkz. `incident_manager.py` | konum hesabı ve bakış noktası seçimi girdileri |

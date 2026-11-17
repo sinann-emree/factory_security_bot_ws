@@ -7,7 +7,9 @@
 ## Dizinler
 - `config/slam_toolbox_mapping.yaml` — online async haritalama (base_frame `base_footprint`, `/scan`)
 - `config/nav2_params.yaml` — AMCL, map_server, bt_navigator, controller (RegulatedPurePursuit), planner (SmacPlanner2D; Aşama 5b'de NavFn'den geçildi, gerekçe yaml'da),
-  costmap'ler, behavior_server, waypoint_follower, velocity_smoother, collision_monitor
+  costmap'ler, behavior_server, waypoint_follower, velocity_smoother, collision_monitor.
+  Costmap engel kaynakları: `scan` (LiDAR) + `keepout` (`/security/keepout`, `PointCloud2`, `map`
+  çerçevesi; `fsb_patrol` olay listesindeki yatan kişilerin çevresi — yayıncı yokken etkisiz)
 - `maps/factory.yaml|pgm` — SLAM ile çıkarılmış harita (0.05 m/hücre)
 - `launch/slam.launch.py` — slam_toolbox (lifecycle) + lifecycle_manager
 - `launch/navigation.launch.py` — map_server + AMCL + Nav2 (nav2_bringup'ın opennav_docking'i yok)

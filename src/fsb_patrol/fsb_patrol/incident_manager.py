@@ -66,6 +66,8 @@ INCIDENT_PARAMS = {
     'observe_min_hits': 3,           # "görüldü" için konuma düşen yatan-insan tespiti sayısı
     'revisit_interval': 300.0,       # sim-s; kayıttan / doğrulamadan sonra revisit
     'revisit_retry': 60.0,           # sim-s; görüş doğrulanamayınca yeniden deneme
+    'add_max_range': 6.5,            # m; bundan uzaktan konumlanan tespit yeni kayıt açmaz
+    'unconfirmed_merge_radius': 2.0,  # m; kayıtta doğrulanamamış kayda bu kadar yakın yeni tespit
     'keepout_radius': 1.0,           # m; etkin kaydın çevresinde costmap yasak bölgesi (0: kapalı)
     'keepout_topic': '/security/keepout',
     'view_max_range': 4.0,           # m; "kişi yok" kararı için en uzak bakış mesafesi
@@ -91,7 +93,8 @@ class IncidentMixin:
         self._last_image: Optional[Image] = None
         self._last_posture: Optional[dict] = None
         self.total.update({'new_persons': 0, 'alerts_known': 0, 'alerts_unlocated': 0,
-                           'alerts_deferred': 0, 'revisits': 0, 'confirmed': 0,
+                           'alerts_deferred': 0, 'alerts_far': 0, 'relocated': 0,
+                           'revisits': 0, 'confirmed': 0,
                            'resolved': 0, 'unverified': 0})
         if not bool(self.ip['react_to_alerts']):
             return
@@ -215,10 +218,34 @@ class IncidentMixin:
         if self.mission is not None:
             self.total['alerts_deferred'] += 1   # görev bitince yeniden görülürse eklenir
             return
+        pose = self._robot_pose(timeout=0.0)
+        rng = math.inf if pose is None else math.hypot(x - pose[0], y - pose[1])
+        if rng > float(self.ip['add_max_range']):
+            # Uzak tespitte kutu–LiDAR eşlemesi güvenilmez (ölçüm: 10 m'den 2.7 m hatalı konum).
+            # Kayıt açılmaz; devriye yaklaşınca yeniden görülür.
+            self.total['alerts_far'] += 1
+            return
+        stale = self._unconfirmed_near(x, y)
+        if stale is not None:
+            # Kayıtta hiçbir açıdan doğrulanamamış kayıt büyük olasılıkla yanlış konumlandı:
+            # yeni kayıt açmak yerine o kayıt yeni konuma taşınır ve kayıt yinelenir.
+            old = (stale.x, stale.y)
+            stale.x, stale.y, stale.extent = round(x, 3), round(y, 3), []
+            self.watch.set_extent(stale, cluster)
+            stale.last_seen_sim = round(self.now(), 3)
+            self.total['relocated'] += 1
+            self.get_logger().info(
+                f'#{stale.id}: doğrulanamamış kayıt ({old[0]:+.2f}, {old[1]:+.2f}) → '
+                f'({stale.x:+.2f}, {stale.y:+.2f}) konumuna taşındı; kayıt yineleniyor')
+            self.watch.log_event('relocated', id=stale.id, x=stale.x, y=stale.y,
+                                 old=list(old), sim_time=round(self.now(), 3), method=method)
+            self.watch.save()
+            self._publish_markers()
+            self._start_mission('inspect', stale)
+            return
         e = self.watch.add(x, y, self.now())
         self.watch.set_extent(e, cluster)
         self.total['new_persons'] += 1
-        pose = self._robot_pose(timeout=0.0)
         self.get_logger().warning(
             f'!!! YATAN İNSAN #{e.id}: güven {hyp.score:.2f}, map konumu ({e.x:+.2f}, {e.y:+.2f}) '
             f'[{method}, {n} nokta] — listeye eklendi, devriye durduruldu, kayıt alınıyor')
@@ -229,6 +256,15 @@ class IncidentMixin:
         self.watch.save()
         self._publish_markers()
         self._start_mission('inspect', e)
+
+    def _unconfirmed_near(self, x: float, y: float) -> Optional[WatchEntry]:
+        """Kaydı alınmış ama hiç doğrulanmamış, (x, y)'ye yakın etkin kayıt (yoksa None)."""
+        r = float(self.ip['unconfirmed_merge_radius'])
+        for e in self.watch.active():
+            if e.observations and not any(o.get('seen') for o in e.observations) and \
+                    e.confirmations == 0 and self.watch.distance(e, x, y) <= r:
+                return e
+        return None
 
     def _on_detections(self, msg: Detection2DArray) -> None:
         m = self.mission

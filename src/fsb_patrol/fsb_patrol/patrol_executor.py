@@ -416,7 +416,8 @@ class PatrolExecutor(IncidentMixin, Node):
                 f'yatan insan: yeni {self.total["new_persons"]}, revisit {self.total["revisits"]} '
                 f'(hâlâ yerde {self.total["confirmed"]}, çözüldü {self.total["resolved"]}, '
                 f'doğrulanamadı {self.total["unverified"]}), bilinen konumdan yok sayılan alarm '
-                f'{self.total["alerts_known"]}')
+                f'{self.total["alerts_known"]}, uzak olduğu için ertelenen '
+                f'{self.total["alerts_far"]}, taşınan kayıt {self.total["relocated"]}')
             return
         self._new_lap()
 

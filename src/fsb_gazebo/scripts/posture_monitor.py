@@ -14,6 +14,7 @@ Kullanım:
 
 import argparse
 import json
+import signal
 from typing import Any, Dict, List
 
 import rclpy
@@ -83,7 +84,14 @@ def main() -> None:
     ap.add_argument('--duration', type=float, default=0.0, help='sim-s; 0 = Ctrl-C bekle')
     ap.add_argument('--json', default='', help='özetin yazılacağı dosya')
     args = ap.parse_args()
-    rclpy.init()
+
+    def stop(*_: Any) -> None:
+        raise KeyboardInterrupt
+
+    # arka planda (SIGINT yok sayılırken) ya da SIGTERM ile durdurulunca da özet yazılsın
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    rclpy.init(signal_handler_options=rclpy.SignalHandlerOptions.NO)
     node = Monitor()
     start = None
     try:
