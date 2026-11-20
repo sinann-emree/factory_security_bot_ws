@@ -305,7 +305,10 @@ velocity_smoother:
   ros__parameters:
     enable_stamped_cmd_vel: true
     smoothing_frequency: 20.0
-    stamp_smoothed_velocity_with_smoothing_time: false
+    # true: çıktı smoother'ın kendi zamanıyla damgalanır. false iken girdi kesildiğinde (ör. hedef
+    # bitince) son komut eski damgasıyla velocity_timeout boyunca yinelenir ve diff_drive_controller
+    # bunları cmd_vel_timeout'u (0.5 s) aştığı için "older than the current time" uyarısıyla reddeder.
+    stamp_smoothed_velocity_with_smoothing_time: true
     scale_velocities: false
     feedback: "OPEN_LOOP"
     # diff_drive sınırlarının (0.2 m/s, 1.0 rad/s, 0.5 m/s², 1.5 rad/s²) altında/eşit
@@ -316,7 +319,9 @@ velocity_smoother:
     odom_topic: /odometry/filtered
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
+    # = diff_drive_controller cmd_vel_timeout: girdi kesilince 0.5 s sonra sıfır hız (önceki durma
+    # gecikmesiyle aynı)
+    velocity_timeout: 0.5
 
 collision_monitor:
   ros__parameters:

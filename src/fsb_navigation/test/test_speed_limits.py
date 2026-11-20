@@ -66,6 +66,14 @@ def test_smoother_does_not_limit_rpp_below_its_target(nav):
     assert fp['desired_linear_vel'] <= vs['max_velocity'][0]
 
 
+def test_smoother_output_is_not_stale(nav, ddc):
+    # Smoother eski damgalı komut yinelerse controller onları cmd_vel_timeout sonrası reddeder;
+    # girdi kesilince smoother en geç controller'ın zaman aşımında sıfıra inmeli.
+    vs = nav['velocity_smoother']['ros__parameters']
+    assert vs['stamp_smoothed_velocity_with_smoothing_time'] is True
+    assert vs['velocity_timeout'] <= ddc['cmd_vel_timeout']
+
+
 def test_behaviors_within_controller_limits(nav, ddc):
     b = nav['behavior_server']['ros__parameters']
     assert b['max_rotational_vel'] <= ddc['angular.z.max_velocity']
