@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (rosdep, without Gazebo/GUI packages)
+        shell: bash
+        # Gazebo, RViz and GUI keys are skipped: no CI test starts the simulator or a window.
+        # Everything needed by the tests (xacro, numpy, scipy, matplotlib, PyYAML, Nav2/vision
+        # message packages, ament linters) is still installed.
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-colcon-common-extensions python3-rosdep
+          rosdep update --rosdistro jazzy
+          rosdep install --from-paths src --ignore-src --rosdistro jazzy -y \
+            --skip-keys "gz_ros2_control ros_gz_sim ros_gz_bridge gz_msgs_vendor gz_transport_vendor rviz2 nav2_rviz_plugins joint_state_publisher_gui teleop_twist_keyboard"
+
+      - name: Build and test
+        shell: bash
+        run: scripts/ci.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/*/test_results/
+          if-no-files-found: ignore
