@@ -27,11 +27,17 @@ colcon test-result --all --verbose
 **Expected:** `0 errors, 0 failures` in every package. The only skipped test is `ament_copyright`
 (template from `ros2 pkg create`; source files carry no copyright header).
 
+No test reads or writes `~/.ros/fsb_security` (persistent incident list); tests that persist
+state use pytest `tmp_path`. CI therefore starts from a clean state on every run.
+
 | Package | Tests | What they check |
 |---|---|---|
 | all | flake8, pep257, xmllint, lint_cmake | Style, docstrings, XML and CMake format |
 | `fsb_description` | `test_params_consistency.py` (14) | Wheel radius/separation identical in URDF and `controllers.yaml`; controller frames and flags; wheels and caster touch the ground; wheel axes; LiDAR joint rotated 180°; IMU on the rotation axis; TF tree; valid inertials (positive definite, triangle inequality); sensor `frame_id` = URDF link; ros2_control plugin selected by `use_sim` |
 | `fsb_perception` | `test_posture.py` (7) | Posture rules: upright, lying by torso axis, lying by box aspect when keypoints are weak or missing, ambiguous → unknown, thresholds are parameters |
+| `fsb_control` | `test_cmd_vel_watchdog.py` (3) | Real rclpy nodes in an isolated namespace: no output before the first command; commands forwarded unchanged; zero velocity `timeout` after commands stop (delay checked), repeated at `zero_rate`, `~/timed_out` = true; relay re-opens when commands return |
+| `fsb_navigation` | `test_speed_limits.py` (6) | RPP, velocity smoother and behavior server speed/acceleration limits ≤ `diff_drive_controller` limits; smoother does not clip the RPP target; smoother output is re-stamped and times out no later than the controller (see "Known issues") |
+| `fsb_patrol` | `test_planner_output.py` (1) | Waypoint yaml written by the planner references the map and `robot_params` with paths relative to the output file that resolve to real files; no absolute path or home directory in the text |
 | `fsb_patrol` | `test_incident.py` (15) | Lying-person localisation from LiDAR (background and isolated points rejected, LiDAR mounting respected), viewpoint selection, "position is empty" decision (person gone / still there / occluded / outside FoV), watchlist merging and persistence |
 
 ## Level 2 — Planner (no Gazebo, part of `colcon test`)
@@ -91,7 +97,24 @@ script in another. Most scripts print a summary on Ctrl+C or with `--report N`. 
 | Coverage from actual path | `coverage:=true` | ≥ 95 % | 99.95 % (narrow 99.94 %), 12/12 corridors |
 | Real-time factor | `perf_monitor.py --duration 240` | — | 0.951 no perception · 0.944 YOLOv8n-pose (raw) · 0.910 YOLOv8n-pose (compressed + watchdog, 3 lying people) |
 | **0.2 m/s limit** (2026-11-20) | `localization:=amcl headless:=true`, 4 `NavigateToPose` goals, then 0.3 m/s sent directly to `/cmd_vel` | command ≤ 0.2 m/s; controller clamps 0.3 | 4/4 SUCCEEDED; max `/cmd_vel` 0.200, EKF 0.203, controller odom 0.202 m/s; direct 0.3 m/s → odom **0.201 m/s** |
-| **Short patrol at 0.2 m/s** (2026-11-20) | `patrol_executor.launch.py loops:=1` | loop completes, no timeouts | Stopped by the 1700 s wall-clock limit before the loop finished: 25/29 waypoints reached, **0 skipped, 0 timeouts**, leg time median 25.9 / max 58.4 sim-s (limit 180); max `/cmd_vel` 0.200, controller odom 0.206, EKF 0.204 m/s. The loop was lengthened by 25 revisit viewpoints for two incident entries left in `~/.ros/fsb_security` by earlier runs. The controller logged 281 "message older than current time" warnings (stale `TwistStamped` stamps under load); cause not yet investigated |
+| **Short patrol at 0.2 m/s, clean incident log** (2026-11-20, after the smoother fix below) | `localization:=amcl headless:=true` + `patrol_executor.launch.py loops:=1 alert_log_dir:=<empty dir>` | loop completes, no timeouts | **Loop 1/1 complete**: 30/30 visits, 0 skipped, 0 timeouts, 0 revisits; 972 sim-s (1005 s wall); leg time median 26.6 / max 95.1 sim-s (limit 180); max `/cmd_vel` 0.200, controller odom 0.205, EKF 0.203 m/s; **0** "older than current time" warnings |
+| Short patrol at 0.2 m/s, first attempt (2026-11-20, superseded) | `patrol_executor.launch.py loops:=1` with the default log dir | loop completes, no timeouts | Stopped by the 1700 s wall-clock limit before the loop finished: 25/29 waypoints reached, **0 skipped, 0 timeouts**, leg time median 25.9 / max 58.4 sim-s (limit 180); max `/cmd_vel` 0.200, controller odom 0.206, EKF 0.204 m/s. The loop was lengthened by 25 revisit viewpoints for two incident entries left in `~/.ros/fsb_security` by earlier runs. The controller logged 281 "message older than current time" warnings; cause found and fixed (see "Known issues") |
+
+## Known issues and resolved findings
+
+- **Resolved — stale `cmd_vel` stamps (2026-11-20).** `diff_drive_controller` logged
+  "Ignoring the received message ... older than the current time" 281 times in one patrol. The
+  warnings came in bursts of ~11 identical stamps: with
+  `stamp_smoothed_velocity_with_smoothing_time: false`, `velocity_smoother` keeps the stamp of the
+  last *input* command and, when its input stops (goal reached, controller paused), republishes it
+  at 20 Hz until `velocity_timeout` (1.0 s). After 0.5 s (`cmd_vel_timeout`) those messages are too
+  old and the controller drops them. Behaviour was safe (the controller stopped on its own timeout)
+  but the log was noisy. Fix: `stamp_smoothed_velocity_with_smoothing_time: true` and
+  `velocity_timeout: 0.5` (= `cmd_vel_timeout`); guarded by `test_speed_limits.py`. The repeat
+  patrol logged 0 warnings.
+- **Incident state persists across runs.** `~/.ros/fsb_security` is reloaded on start (by design,
+  for a real robot). For reproducible measurements use an empty directory
+  (`security_log_dir:=$(mktemp -d)` / `alert_log_dir:=...`).
 
 ## CI
 
@@ -101,15 +124,16 @@ Gazebo or needs a GPU. Levels 3–4 are not run in CI.
 
 ## Last local run
 
-`scripts/ci.sh` on the development machine (2026-11-20): **109 tests, 0 errors, 0 failures,
-2 skipped** (`ament_copyright` in `fsb_patrol` and `fsb_perception`).
+`scripts/ci.sh` on the development machine (2026-11-20): **123 tests, 0 errors, 0 failures,
+2 skipped** (`ament_copyright` in `fsb_patrol` and `fsb_perception`). Counts are as reported by
+`colcon test-result` (CTest entries plus individual pytest cases).
 
-| Package | Tests | Result |
-|---|---|---|
-| `fsb_bringup` | 4 (lint) | pass |
-| `fsb_control` | 4 (lint) | pass |
-| `fsb_description` | 22 (lint + 14 consistency) | pass |
-| `fsb_gazebo` | 21 (lint) | pass |
-| `fsb_navigation` | 6 (lint) | pass |
-| `fsb_patrol` | 25 (lint + 15 incident + 7 planner variants) | pass, 1 skipped |
-| `fsb_perception` | 10 (lint + 7 posture) | pass, 1 skipped |
+| Package | Count | Content | Result |
+|---|---|---|---|
+| `fsb_bringup` | 8 | lint | pass |
+| `fsb_control` | 13 | lint + watchdog (3) | pass |
+| `fsb_description` | 25 | lint + consistency (14) | pass |
+| `fsb_gazebo` | 24 | lint | pass |
+| `fsb_navigation` | 17 | lint + speed limits (6) | pass |
+| `fsb_patrol` | 26 | lint + incident (15) + planner variants (7) + planner output (1) | pass, 1 skipped |
+| `fsb_perception` | 10 | lint + posture (7) | pass, 1 skipped |

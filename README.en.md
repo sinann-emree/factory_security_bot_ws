@@ -1,5 +1,7 @@
 # Factory Security Patrol Robot (ROS 2 Jazzy · Gazebo Harmonic)
 
+**English** · [Türkçe](README.md)
+
 [![CI](https://github.com/sinann-emree/factory_security_bot_ws/actions/workflows/ci.yml/badge.svg)](https://github.com/sinann-emree/factory_security_bot_ws/actions/workflows/ci.yml)
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-22314E)
 ![Gazebo Harmonic](https://img.shields.io/badge/Gazebo-Harmonic-F58113)
@@ -18,7 +20,7 @@ hardware, planned) uses the same software with a different ros2_control hardware
 **Contents:** [Developed in this project](#developed-in-this-project) ·
 [Open-source components](#open-source-components) · [Architecture](#architecture) ·
 [Results](#results-simulation) · [Install](#install) · [Run](#run) · [Status](#status) ·
-[Documentation](#documentation) · [License](#license) · [Türkçe özet](#türkçe-özet)
+[Documentation](#documentation) · [License](#license)
 
 ---
 
@@ -108,8 +110,13 @@ scripts/install_deps.sh          # apt + rosdep (Nav2, SLAM Toolbox, ros_gz, Gaz
 source /opt/ros/jazzy/setup.bash
 colcon build                     # --symlink-install is not used in this project
 source install/setup.bash
-colcon test && colcon test-result --verbose
+colcon test && colcon test-result --verbose   # or scripts/ci.sh (same steps as CI)
 ```
+
+`colcon test` covers lint, URDF ↔ controller parameter consistency, Nav2 ↔ controller speed-limit
+consistency, posture rules, incident localisation and watchlist, planner results on 7 map variants,
+relative paths in planner output and `cmd_vel_watchdog` timeout behaviour. None of it needs Gazebo or
+a GPU; details in [`docs/TESTING.md`](docs/TESTING.md).
 
 `scripts/install_deps.sh --check` only verifies dependencies (no sudo). Side effects of the
 install mode: system apt packages, `rosdep init` (`/etc/ros/rosdep/`) on first use, rosdep cache in
@@ -149,7 +156,9 @@ ros2 run fsb_patrol patrol_planner --map src/fsb_navigation/maps/factory.yaml \
 
 Useful arguments: `headless:=true`, `patrol_mode:=idleness|sequential|random`, `coverage:=true`,
 `image_transport:=compressed`, `cmd_vel_watchdog:=true`. Incident files are written to
-`~/.ros/fsb_security/` (outside the repository). WSL2: if windows do not open, try
+`~/.ros/fsb_security/` (outside the repository) and reloaded on restart; for a run independent
+of earlier runs pass an empty directory: `security_log_dir:=$(mktemp -d)`. Unit tests never touch
+this directory (they use pytest `tmp_path`). WSL2: if windows do not open, try
 `export LIBGL_ALWAYS_SOFTWARE=1` or `headless:=true`.
 
 ## Status
@@ -184,21 +193,3 @@ together with it falls under AGPL-3.0 or needs Ultralytics' commercial licence. 
 [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
 
 **Author:** Sinan Emre Gülşen — [@sinann-emree](https://github.com/sinann-emree)
-
----
-
-## Türkçe özet
-
-ROS 2 Jazzy ve Gazebo Harmonic üzerinde, fabrika zemininde otonom devriye gezen bir güvenlik robotu.
-Diferansiyel sürüşlü robot (Andino ölçüleri), 360° LiDAR, kamera ve IMU taşır. Simülasyon ve gerçek
-robot aynı yazılım yığınını kullanır; yalnızca ros2_control donanım eklentisi değişir.
-
-- Devriye noktaları haritadan otomatik üretilir (medial axis, greedy set cover, TSP); fabrika
-  haritasında 29 nokta ve %95 planlı kapsama.
-- Idleness tabanlı devriye: 5 turda 0 atlama, 0 çarpışma; gerçek yoldan kapsama %99.95.
-- YOLOv8-pose ile yalnızca **yerde yatan insan** için alarm; kişi LiDAR ile haritada konumlanır,
-  3 açıdan kaydedilir ve sonra yeniden kontrol edilir. 4 dünyada 12/12 kişi bulundu; negatif
-  testte 0 alarm.
-- Tüm sonuçlar simülasyondur. Gerçek donanım, görev yöneticisi ve uzaktan bildirim henüz yoktur.
-
-Kurulum ve çalıştırma komutları yukarıdadır; paket README'leri Türkçedir.
