@@ -364,6 +364,17 @@ def summarize(res: PlanResult) -> Dict[str, float]:
     return out
 
 
+def _rel_to(target: str, out_path: str) -> str:
+    """
+    Return ``target`` relative to the directory of ``out_path``.
+
+    Kaynak yolları yalnızca bilgi amaçlıdır (haritanın kimliği sha256 ile doğrulanır);
+    göreli yazılınca dosya makineye/kullanıcıya özel mutlak yol içermez.
+    """
+    return os.path.relpath(os.path.abspath(target),
+                           os.path.dirname(os.path.abspath(out_path)))
+
+
 def write_yaml(res: PlanResult, path: str, params_path: str) -> None:
     gm = res.ma.gm
     s = summarize(res)
@@ -381,8 +392,8 @@ def write_yaml(res: PlanResult, path: str, params_path: str) -> None:
         'generated_by': 'fsb_patrol/patrol_planner',
         'generated_at': datetime.datetime.now().isoformat(timespec='seconds'),
         'frame_id': 'map',
-        'map': {'yaml': gm.source, 'sha256': gm.sha256},
-        'robot_params': os.path.abspath(params_path),
+        'map': {'yaml': _rel_to(gm.source, path), 'sha256': gm.sha256},
+        'robot_params': _rel_to(params_path, path),
         'cost_source': res.cost_source,
         'summary': {k: (round(v, 4) if isinstance(v, float) else v) for k, v in s.items()},
         'dropped': res.dropped,
