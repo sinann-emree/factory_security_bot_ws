@@ -50,9 +50,10 @@ diff_drive_controller:
 
     # --- Hız/ivme sınırları ---
     # andino'da sınır yok (andino_controllers.yaml:25-43 hepsi kapalı) → proje seçimi, Nav2 ile Aşama 5'te ayarlanır.
-    # 0.3 m/s ≈ 9.1 rad/s tekerlek (r=0.0331). Açısal 1.0 rad/s: SLAM için hızlı dönüşten kaçın (dönüş hızı harita bozulmasını artırır).
-    linear.x.max_velocity: 0.3
-    linear.x.min_velocity: -0.3
+    # 0.2 m/s ≈ 6.04 rad/s tekerlek (r=0.0331); hedef motorların (DG01D-E / N20) RPM bütçesine göre
+    # seçildi (docs/HARDWARE.md). Açısal 1.0 rad/s: SLAM için hızlı dönüşten kaçın (dönüş hızı harita bozulmasını artırır).
+    linear.x.max_velocity: 0.2
+    linear.x.min_velocity: -0.2
     linear.x.max_acceleration: 0.5
     linear.x.max_deceleration: -0.5
     angular.z.max_velocity: 1.0

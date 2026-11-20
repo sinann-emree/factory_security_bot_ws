@@ -39,8 +39,8 @@ ros2 launch fsb_patrol patrol.launch.py use_sim_time:=true loops:=10
 |---|---|---|
 | footprint | x∈[-0.204, 0.070], y=±0.087 | fsb_properties.xacro ölçüleri + 1 cm pay (hesap yaml'da) |
 | slam `max_laser_range`, amcl `laser_max_range` | 8.0 m (sensör 12 m) | Gazebo gpu_lidar teğet gelişte (80–85°) 4–12 m'de medyan +19…+37 cm uzun ölçer. 12 m ile haritada eğik hayalet duvarlar (dolu hücrelerin %50'si >10 cm), 8 m ile %0.04 |
-| RPP `desired_linear_vel` | 0.22 m/s | diff_drive limiti 0.3 m/s altında |
-| velocity_smoother `max_velocity` | [0.25, 0, 0.8] | diff_drive limitleri (0.3 m/s, 1.0 rad/s) altında |
+| RPP `desired_linear_vel` | 0.2 m/s | diff_drive limitine (0.2 m/s) eşit |
+| velocity_smoother `max_velocity` | [0.2, 0, 0.8] | diff_drive limitleri (0.2 m/s, 1.0 rad/s) altında/eşit |
 | behavior_server dönüş | ≤ 0.8 rad/s | SLAM/lokalizasyon kalitesi için hızlı dönüşlerden kaçın |
 | collision_monitor scan `min_height` | 0.05 | varsayılan 0.15 m, LiDAR yüksekliğinin (0.107 m) üstünde → tüm noktalar atılırdı |
 | collision_monitor StopZone | footprint + 3 cm | |

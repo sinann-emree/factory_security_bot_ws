@@ -119,8 +119,8 @@ controller_server:
       yaw_goal_tolerance: 0.25
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      # Hızlar diff_drive sınırlarının altında (controllers.yaml: 0.3 m/s, 1.0 rad/s)
-      desired_linear_vel: 0.22
+      # Hızlar diff_drive sınırlarının altında/eşit (controllers.yaml: 0.2 m/s, 1.0 rad/s)
+      desired_linear_vel: 0.2
       lookahead_dist: 0.5
       min_lookahead_dist: 0.3
       max_lookahead_dist: 0.9
@@ -308,9 +308,9 @@ velocity_smoother:
     stamp_smoothed_velocity_with_smoothing_time: false
     scale_velocities: false
     feedback: "OPEN_LOOP"
-    # diff_drive sınırlarının (0.3 m/s, 1.0 rad/s, 0.5 m/s², 1.5 rad/s²) altında/eşit
-    max_velocity: [0.25, 0.0, 0.8]
-    min_velocity: [-0.25, 0.0, -0.8]
+    # diff_drive sınırlarının (0.2 m/s, 1.0 rad/s, 0.5 m/s², 1.5 rad/s²) altında/eşit
+    max_velocity: [0.2, 0.0, 0.8]
+    min_velocity: [-0.2, 0.0, -0.8]
     max_accel: [0.5, 0.0, 1.5]
     max_decel: [-0.5, 0.0, -1.5]
     odom_topic: /odometry/filtered

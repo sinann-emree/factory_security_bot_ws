@@ -33,5 +33,5 @@ ros2 run fsb_control cmd_vel_watchdog.py --ros-args -r cmd_vel_in:=/cmd_vel \
 - `wheel_radius`/`wheel_separation`: `fsb_description` xacro property'si ile birebir (0.0331 / 0.128).
 - `enable_odom_tf: false` (TF'i EKF yayınlar), `base_frame_id: base_footprint`.
 - `has_*_limits` deprecated → yazılmaz; yazılmayan sınır NaN = sınırsız. Kurallar: `min_velocity ≤ 0`, `max_acceleration ≥ 0`, `max_deceleration ≤ 0`.
-- Sınırlar: lineer ±0.3 m/s, ±0.5 m/s²; açısal ±1.0 rad/s, ±1.5 rad/s² (proje seçimi, Aşama 5'te Nav2 ile ayarlanır).
+- Sınırlar: lineer ±0.2 m/s, ±0.5 m/s²; açısal ±1.0 rad/s, ±1.5 rad/s² (proje seçimi; 0.2 m/s hedef motorların RPM bütçesinden, bkz. `docs/HARDWARE.md`).
 - `update_rate` / `publish_rate`: 50 Hz (andino).
