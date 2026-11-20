@@ -187,9 +187,10 @@ this directory (they use pytest `tmp_path`). WSL2: if windows do not open, try
 
 ## License
 
-Apache-2.0 ([`LICENSE`](LICENSE)). The optional perception node uses **Ultralytics YOLO
-(AGPL-3.0)** at runtime; it is not included here, but a system distributed or offered as a service
-together with it falls under AGPL-3.0 or needs Ultralytics' commercial licence. See
+Apache-2.0 ([`LICENSE`](LICENSE)). The optional perception node uses Ultralytics YOLO
+(AGPL-3.0) at runtime; Ultralytics is not included in this repository. If you plan to distribute a
+system with this component or offer it as a network service, review the current licence terms
+(AGPL-3.0 or a commercial licence) yourself. This note is not legal advice. See
 [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
 
 **Author:** Sinan Emre Gülşen — [@sinann-emree](https://github.com/sinann-emree)

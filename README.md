@@ -254,9 +254,9 @@ Hangi bileşenden ne alındığı, sürümleri ve lisansları: [`ATTRIBUTIONS.md
 
 **Lisans:** Apache-2.0 ([`LICENSE`](LICENSE)).
 
-**Ultralytics notu:** İsteğe bağlı algı düğümü çalışma zamanında **Ultralytics YOLO**'yu
-(**AGPL-3.0**) kullanıyor. Ultralytics bu repoda yer almıyor. Ancak onunla birlikte dağıtılan ya da
-ağ üzerinden hizmet olarak sunulan bir sistem AGPL-3.0 yükümlülüklerine tabidir ya da Ultralytics'in
-ticari lisansını gerektirir.
+**Ultralytics notu:** İsteğe bağlı algı düğümü çalışma zamanında Ultralytics YOLO'yu (AGPL-3.0)
+kullanıyor; Ultralytics bu repoda yer almıyor. Bu bileşenle birlikte bir sistem dağıtmayı ya da ağ
+üzerinden hizmet olarak sunmayı düşünüyorsanız güncel lisans koşullarını (AGPL-3.0 veya ticari
+lisans) kendiniz inceleyin. Bu not hukuki tavsiye değildir.
 
 **Yazar:** Sinan Emre Gülşen — [@sinann-emree](https://github.com/sinann-emree)
