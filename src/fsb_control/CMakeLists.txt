@@ -21,6 +21,10 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  # cmd_vel_watchdog: iletme, zaman aşımında sıfır hız, yeniden açılma
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_cmd_vel_watchdog test/test_cmd_vel_watchdog.py TIMEOUT 120)
 endif()
 
 install(DIRECTORY config launch

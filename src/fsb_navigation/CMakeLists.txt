@@ -21,6 +21,10 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  # Nav2 hız/ivme sınırları ≤ diff_drive_controller sınırları
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_speed_limits test/test_speed_limits.py)
 endif()
 
 install(DIRECTORY config maps launch
