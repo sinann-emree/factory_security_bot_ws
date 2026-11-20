@@ -34,3 +34,8 @@ fsb_security/
 !docs/images/*.png
 !src/fsb_navigation/maps/*.png
 !src/fsb_navigation/maps/*.pgm
+
+
+# Demo medyası (README'de kullanılır)
+!media/*.png
+!media/*.jpg
