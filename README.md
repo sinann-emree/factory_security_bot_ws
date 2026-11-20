@@ -1,312 +1,204 @@
-# Fabrika Otonom Güvenlik ve Devriye Robotu
+# Factory Security Patrol Robot (ROS 2 Jazzy · Gazebo Harmonic)
 
+[![CI](https://github.com/sinann-emree/factory_security_bot_ws/actions/workflows/ci.yml/badge.svg)](https://github.com/sinann-emree/factory_security_bot_ws/actions/workflows/ci.yml)
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-22314E)
 ![Gazebo Harmonic](https://img.shields.io/badge/Gazebo-Harmonic-F58113)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
-> **English summary.** An autonomous security and patrol robot for factory floors, built on
-> ROS 2 Jazzy and Gazebo Harmonic. A differential-drive robot (Andino-class dimensions) with a 360°
-> LiDAR, RGB camera and IMU uses ros2_control (identical stack for simulation and real hardware),
-> EKF odometry fusion, SLAM Toolbox / AMCL / Nav2, and a patrol planner that generates waypoints
-> automatically from the map (medial-axis skeleton + greedy set cover + TSP) and executes them with an
-> idleness-based strategy. A YOLOv8-pose node classifies posture and raises an alert only for a
-> person lying on the floor; the patrol localises the person on the map with the LiDAR, records them
-> from several angles into a persistent incident list, resumes, and later revisits the spot to either
-> renew the alert or mark it resolved. Simulation stages 0–6b are complete and verified; the
-> real-robot port (stage 7) is planned.
+A differential-drive security robot that patrols a factory floor autonomously, generates its patrol
+route from the map, and raises an alert when it finds a **person lying on the floor**. Everything
+runs in simulation today; the control stack is built so that the real robot (Andino-class
+hardware, planned) uses the same software with a different ros2_control hardware plugin.
 
-**ROS 2 Jazzy + Gazebo Harmonic tabanlı, fabrika zemininde otonom devriye gezen güvenlik robotu.**
+<!-- Demo: replace with a recording, e.g. media/demo.gif (patrol in RViz + Gazebo) -->
+> **Demo:** _video/GIF placeholder — `media/demo.gif` (to be recorded)._
 
-![Haritadan otomatik üretilen devriye noktaları](docs/images/waypoints_factory.png)
+![Patrol waypoints generated from the map](docs/images/waypoints_factory.png)
 
----
-
-## İçindekiler
-- [Öne çıkan özellikler](#öne-çıkan-özellikler)
-- [Mimari](#mimari)
-- [Kurulum](#kurulum)
-- [Çalıştırma](#çalıştırma)
-- [Durum](#durum)
-- [Atıflar](#atıflar)
-- [Lisans](#lisans)
+**Contents:** [Developed in this project](#developed-in-this-project) ·
+[Open-source components](#open-source-components) · [Architecture](#architecture) ·
+[Results](#results-simulation) · [Install](#install) · [Run](#run) · [Status](#status) ·
+[Documentation](#documentation) · [License](#license) · [Türkçe özet](#türkçe-özet)
 
 ---
 
-## Öne çıkan özellikler
+## Developed in this project
 
-Aşağıdaki tüm sayılar simülasyonda (Gazebo Harmonic, 20×14 m fabrika dünyası) ölçülmüştür;
-kaynakları geliştirme sırasında alınan ölçümler ve commit geçmişidir.
+All `fsb_*` packages were written for this project. Known methods are named; the work is in how
+they are combined, parameterised and tested here — no new algorithm is claimed.
 
-### Sim/real uyumlu ros2_control mimarisi
-- Tek URDF/xacro; `use_sim` argümanı yalnızca donanım eklentisini değiştirir
-  (`gz_ros2_control/GazeboSimSystem` ↔ gerçek robot hardware interface). Nav2, SLAM ve devriye katmanı
-  iki ortamda da aynıdır.
-- Fiziksel parametreler tek kaynakta (`fsb_properties.xacro`); tekerlek yarıçapı 0.0331 m,
-  tekerlek ayrımı 0.128 m. `test_params_consistency.py` URDF ↔ `controllers.yaml` uyumunu test eder.
-- `joint_state_broadcaster` + `diff_drive_controller` (`cmd_vel` = `TwistStamped`, doğrulandı).
-- 1 m ileri komutunda odom 1.0260 m = gerçek 1.0260 m; ±360° dönüşte odom–gerçek farkı
-  −0.003° / +0.002°.
-- LiDAR 180° dönük monte (`rpy="0 0 π"`); scan hizalama testinde doğru montaj %97.9 / %98.5 inlier,
-  yanlış (+180°) varsayım %1.5 / %5.7.
-
-### EKF ile odometri birleştirme
-- `robot_localization` EKF: tekerlek odometrisi (vx, vy, vyaw) + IMU (vyaw), 30 Hz.
-- `odom → base_footprint` TF'inin **tek** yayıncısı EKF'dir (`enable_odom_tf: false`).
-- 5 dk rastgele sürüş drift testi (~44 m, ~3000° toplam dönüş): kapalı çevrim hatası
-  0.18 cm / +0.11° ve 1.08 cm / −0.26°.
-
-### SLAM Toolbox + AMCL + Nav2
-- SLAM Toolbox ile haritalama; harita kalitesi (dünyaya karşı): dolu hücre → yüzey medyan 2.2 cm,
-  p95 5.5 cm, %99.96'sı ≤ 10 cm, çift duvar yok, kapsama %99.1.
-- AMCL: +60 cm / 16.5° hatalı ilk pozdan 7.0 sim-saniyede 1.2 cm / 0.5° hataya yakınsama.
-- Nav2: SmacPlanner2D global planlayıcı, Regulated Pure Pursuit, velocity_smoother, collision_monitor.
-  NavFn 810 waypoint çiftinin 21'inde yol bulamazken SmacPlanner2D 0/810.
-- 4 noktalı devriyede 10/10 tur başarılı, 0 kurtarma davranışı; dinamik engel testinde (rotaya
-  konan 0.5 m kutu) hedefe ulaşıldı, minimum açıklık 38.8 cm.
-
-![SLAM Toolbox ile çıkarılan fabrika haritası](docs/images/map_factory.png)
-
-### Haritadan otomatik waypoint üretimi (`patrol_planner`)
-Kodda hiçbir dünya koordinatı yoktur; girdi yalnızca harita + `robot_params.yaml`.
-1. Serbest alan robot yarıçapı + güvenlik payı kadar şişirilir.
-2. Medial axis iskeleti (Zhang–Suen inceltme; genelleştirilmiş Voronoi diyagramının ızgara
-   yaklaşıklığı) çıkarılır ve kısa dallar budanır; kavşak, uç ve örnek noktalar aday olur.
-3. Her koridor segmentine (raf araları) en az bir waypoint zorunlu tutulur.
-4. Kamera FOV'u + ışın izleme ile tembel greedy **set cover** (hedef ≥ %95).
-5. Costmap/açıklık doğrulaması, ardından Nav2 gerçek yol uzunluklarıyla **TSP**
-   (n ≤ 12 Held–Karp, aksi halde çok başlangıçlı NN + 2-opt + Or-opt).
-
-Fabrika haritasında sonuç: **29 waypoint**, planlanan kapsama **%95.02** (dar bölge %93.7, geniş
-%98.3), 12/12 koridor segmentine giriş, min açıklık 0.475 m, TSP turu 87.4 m. Döndürülmüş /
-aynalanmış / kırpılmış 7 sentetik harita varyantında (Gazebo'suz, `colcon test` içinde) 12–31
-waypoint ve %95.02–95.65 kapsama.
-
-Yalnızca apt paketleri kullanılır (`python3-numpy`, `python3-scipy`, `python3-yaml`,
-`python3-matplotlib`); scikit-image, networkx ve pip OpenCV bilinçli olarak kullanılmadı.
-
-### Idleness tabanlı devriye (`patrol_executor`)
-- Varsayılan mod `idleness`: skor = ağırlık · bekleme süresi − tahmini yol süresi. Ayrıca
-  `sequential` (TSP sırası) ve `random` modları.
-- Ulaşılamayan hedef atlanır ve loglanır; öncelikli noktalar ayrı yaml'da ağırlıklıdır.
-- RViz'de `/patrol/waypoints` MarkerArray ile durum renkleri (hedef / ziyaret / atlandı / bekliyor).
-- 5 turluk idleness devriyesi: **5/5 tur eksiksiz**, 156 ziyaret, 0 atlama, 0 kurtarma,
-  **0 çarpışma** (ground truth, 528 559 örnek), min açıklık 10.5 cm, ~734 m yol.
-  `map→odom` poz sıçraması maks 4.71 cm (p99 1.87 cm).
-
-### Kapsama izleme (`coverage_monitor`)
-Robotun gerçek yolundan, simüle kamera görüşüyle kapsamayı ölçer. 5 turluk devriyede gerçek yoldan
-kapsama **%99.95** (dar bölge %99.94), 12/12 koridor.
-
-![Gerçek yoldan ölçülen kapsama](docs/images/coverage_real.png)
-
-### YOLOv8 ile insan tespiti ve güvenlik alarmı (`fsb_perception`) — Aşama 6 sonucu
-> Aşağıdaki "her insanda dur" davranışı Aşama 6b'de değiştirildi: alarm artık yalnızca yerde
-> yatan insan için verilir (bir sonraki bölüm). Aşama 6 ölçümleri karşılaştırma için duruyor.
-
-- `yolo_node`: `/camera/image_raw` → `/perception/detections` (`vision_msgs/Detection2DArray`),
-  `/perception/image_annotated`; çıkarım ayrı iş parçacığında, ~5.4 Hz (yolov8n, 640×480).
-- İnsan ≥ %80 güvenle art arda 3 karede görülünce `/security/alerts`; `patrol_executor` **durur,
-  uyarır, olayı kaydeder** (jsonl + işaretli kare) **ve aynı hedefe devam eder**.
-- Sim hedefi: Gazebo Fuel "Walking person" (`factory_person.sdf`). Devriye sırasında hedefin
-  göründüğü karelerin **%95.1'i ≥ 0.8 güven** (431/453, medyan 0.891).
-- Tam tur (YOLO CUDA açık): **30/30 hedef, 0 atlama, 5 alarm** ele alındı; hareket halindeyken
-  gelen alarmda robot 0.67 s'de durdu, ~4.5 s bekleyip devam etti.
-- Nav2'ye etkisi (240 s devriye, 16 çekirdek; algısız → YOLO CUDA → YOLO CPU): RTF 0.951 → 0.936 →
-  0.920; Nav2 CPU %150 → %158 → %164 (tek çekirdek cinsinden); YOLO süreci %68 (CUDA) / %161 (CPU).
-- pip OpenCV ↔ `cv_bridge` çakışması `~/.local`'a dokunmadan çözülür
-  ([`src/fsb_perception/README.md`](src/fsb_perception/README.md)).
-
-### Yerde yatan insan tespiti ve olay listesi (Aşama 6b)
-Alarm **yalnızca yerde yatan insan** içindir; ayakta/yürüyen insan ve hareketli nesneler alarm
-üretmez. Akış: YOLOv8-pose duruş sınıflandırma (gövde ekseni + kutu oranı, N karede M) → LiDAR ile
-`map` konumu → olay listesi (`watchlist.yaml`) → kişinin çevresinden 3 açıdan kayıt → devriyeye
-devam → `revisit_interval` sonra geri dönüp bakma: hâlâ yerde → bildirim yenilenir; yok ve konum
-gerçekten görüldü → **çözüldü**; görüş doğrulanamadı → kayıt silinmez, yeniden denenir.
-Ayrıntılar: [`src/fsb_patrol/README.md`](src/fsb_patrol/README.md),
-[`src/fsb_perception/README.md`](src/fsb_perception/README.md).
-
-**Yakalama** (4 dünya × 3 yatan insan; 4 Fuel modeli, sırtüstü/yüzüstü/yan, farklı konum ve yön):
-
-| Deneme | Tur | Bulunan | Fazla kayıt | Konum hatası, ilk → kayıt sonrası (m) | Kayıt açıları (görüldü/denendi) |
-|---|---|---|---|---|---|
-| A | 15/30 hedef (dışarıdan kesildi) | 3/3 | 0 | 0.28→0.17 · 0.69→0.25 · 0.36→0.31 | 8/9 |
-| B | 30/30 | 3/3 | 1 | 0.15→0.18 · 0.49→0.49 · 0.80→0.65 | 5/8 |
-| C (sıkıştırılmış görüntü + watchdog) | 30/30 | 3/3 | 0 | 0.25→0.14 · 0.28→0.10 · 0.20→0.09 | 7/8 |
-| D (sıkıştırılmış görüntü + watchdog) | 30/30 | 3/3 | 0 | 0.26→0.23 · 0.80→0.45 · 0.06→0.09 | 6/9 |
-| **Toplam** | | **12/12** | **1** | medyan 0.28 → **0.23**, maks 0.80 → 0.65 | **26/34** |
-
-- İlk alarm menzili 1.7–6.3 m (medyan 5.75 m). 12 kişinin 10'u ilk açıda, 11'i ≤ 3 açıda görüldü
-  (görülmeyen: Standing person yüzüstü, 0/2 açı). Kayıt karelerinin 446/573'ünde yatan isabet.
-- Fazla kayıt: B'de aynı kişi 6.2 m'den görülürken LiDAR kümesi arkadaki raf kenarına kaydı (1.16 m
-  hata) ve birleştirme yarıçapının (1 m) hemen dışında kaldı → aynı kişi için 1 ek bildirim.
-- **Negatif test** (`factory_negative.sdf`: ayakta insan + kutu, tam tur 30/30): 4525 çıkarım,
-  471 insanlı kare (363 ayakta, 108 belirsiz, **0 yatan**), **0 alarm**, 0 kayıt. Sabit düzenekte
-  ayakta insan 0/512, kutu 0/192 kare "yatan" sayıldı.
-- **Akış** (revisit 150 sim-s): ekle → 3 açı (13/13, 18/18, 17/17 kare) → revisit **hâlâ yerde**
-  (doğrulama 1, bildirim 2) → kişi kaldırılıp yerine kutu kondu → 6 açıda "görüş doğrulanamadı",
-  **kayıt silinmedi** → kutu kaldırıldı → revisit **ÇÖZÜLDÜ** (0/17 kare; konum FOV'da 2.49 m,
-  görüş hattı açık, LiDAR'da konum boş).
-- **Kamera yüksekliği:** tek karede doğru "yatan" kararı 4.7 cm'de %55, 60 cm'de %67; gerçek
-  robotta kamerayı ≥ 30–60 cm'e almak önerilir.
-- **Başarım** (240 s, 16 çekirdek, CUDA): RTF 0.944 (negatif dünya, ham görüntü) / 0.910
-  (3 yatan insan, sıkıştırılmış görüntü + watchdog); YOLOv8n-pose %72, Nav2 %157–159, Gazebo
-  %225–239 (tek çekirdek cinsinden), GPU %27. Aşama 6: algısız 0.951, YOLOv8n 0.936.
-- **Sunucu mimarisi:** JPEG 8.2 KB/kare (ham 0.92 MB), 15.1 Hz; YOLO sıkıştırılmış girdiden
-  5.2–5.4 Hz. **`cmd_vel_watchdog`:** bağımsız 10/10 denemede komut kesildikten 0.502–0.519 s
-  sonra sıfır hız; turlarda 22 kez devreye girdi (19'u hedefte dururken, 3'ü Nav2 bekleme
-  kurtarmasında), 0 hedef atlandı.
-- Örneklem küçüktür (4 dünya × 1 tur + akış testleri); sayılar Fuel modelleriyle simülasyon ölçümüdür.
-- Gerçek robot için malzeme listesi ve uyumluluk: [`docs/hardware_compat.md`](docs/hardware_compat.md).
-
----
-
-## Mimari
-
-### Paketler
-| Paket | Tür | İçerik |
+| Package / component | What it does | Design decisions |
 |---|---|---|
-| `fsb_description` | ament_cmake | URDF/xacro, sensörler, `<ros2_control>` (sim/real), RViz |
-| `fsb_control` | ament_cmake | `controllers.yaml`, `ekf.yaml`, `cmd_vel_watchdog` (komut kesilince 0.5 s'de dur; gerçek robot hw interface: planlanıyor) |
-| `fsb_gazebo` | ament_cmake | `factory.sdf`, `factory_lying.sdf` (yerde yatan insan), `factory_negative.sdf` (ayakta insan + kutu) dünyaları, `gz_bridge.yaml`, sim launch, test/ölçüm betikleri |
-| `fsb_navigation` | ament_cmake | SLAM Toolbox, AMCL, Nav2 parametreleri ve launch, kayıtlı harita |
-| `fsb_bringup` | ament_cmake | Tek giriş noktası `bringup.launch.py`, RViz konfigürasyonları |
-| `fsb_patrol` | ament_python | `patrol_planner`, `patrol_executor` (+ yatan insan olay listesi: konum, çok açılı kayıt, revisit), `coverage_monitor` |
-| `fsb_perception` | ament_python | YOLOv8-pose düğümü `yolo_node` (ham ya da sıkıştırılmış görüntü; başka makinede çalışabilir): duruş sınıflandırma, `/perception/detections`, `/perception/posture`, `/security/alerts` (yalnızca yatan insan) |
+| **`fsb_description`** — robot model | URDF/xacro with every physical parameter in one file; sim/real ros2_control plugin chosen by `use_sim` | `test_params_consistency.py` fails the build if wheel radius/separation differ between URDF and controller, if the LiDAR is not rotated 180°, if a sensor `frame_id` does not match its link, or if an inertia matrix is invalid |
+| **`fsb_control`** — control config | `diff_drive_controller`, EKF (wheel odometry + IMU yaw rate), speed limits | One owner per TF (`odom→base_footprint` only from the EKF); 0.2 m/s limit derived from the motor budget (`docs/HARDWARE.md`) |
+| **`cmd_vel_watchdog`** (`fsb_control`) | Publishes zero velocity when commands stop | Needed when perception runs off-board; 0.50–0.52 s reaction in 10/10 trials |
+| **`patrol_planner`** (`fsb_patrol`) | Map → patrol waypoints, no hand-placed coordinates | This project's implementation of medial-axis skeleton (Zhang–Suen thinning, an approximation of the generalised Voronoi diagram), viewpoint coverage as greedy **set cover** with camera FoV ray casting, mandatory waypoints in corridor segments, and **TSP** ordering (Held–Karp for n ≤ 12, otherwise nearest neighbour + 2-opt + Or-opt) |
+| **`patrol_executor`** (`fsb_patrol`) | Runs the patrol through Nav2 | Greedy idleness rule (`weight · waiting time − travel time`), skip-and-continue on unreachable goals |
+| **Incident handling** (`fsb_patrol`) | Lying person → map position from LiDAR, persistent incident list, recording from 3 viewpoints, Nav2 keep-out zone, revisit | Entries are removed only when the camera view and LiDAR both confirm the spot is empty; otherwise they are kept and retried |
+| **`coverage_monitor`** (`fsb_patrol`) | Coverage actually seen along the driven path | Same visibility model as the planner, so plan and result are comparable |
+| **`yolo_node`** (`fsb_perception`) | YOLOv8n-pose + posture rules (torso axis, box aspect), M-of-N temporal check | Alerts only for lying people; runs in a worker thread, only on the latest frame; can run on another machine with compressed images |
+| **Measurement tools** (`fsb_gazebo/scripts`) | Ground-truth clearance, odometry/drift, LiDAR mounting check, map quality vs. world, AMCL convergence, recovery counter, RTF/CPU profiler, posture statistics | Every number in the results table comes from one of these scripts |
+| **World generator** (`generate_factory_world.py`) | Parametric 20 × 14 m factory world with optional people/boxes | Output is byte-identical to the committed SDF files |
 
-Her paketin kendi `README.md` dosyasında launch komutları ve parametreler bulunur.
+## Open-source components
+
+The project is built on: **ROS 2 Jazzy**, **Gazebo Harmonic** with `ros_gz` and `gz_ros2_control`,
+**ros2_control** (`diff_drive_controller`), **Nav2** (Smac planner, Regulated Pure Pursuit, AMCL,
+velocity smoother, collision monitor), **SLAM Toolbox**, **robot_localization**, **Ultralytics
+YOLOv8** (AGPL-3.0), Gazebo Fuel human models, and the **Andino** robot (Ekumen-OS, BSD-3) as the
+reference for dimensions, firmware and chassis. Licences, versions and exactly what was used:
+[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    bringup[fsb_bringup] --> desc[fsb_description]
-    bringup --> gz[fsb_gazebo]
-    bringup --> ctrl[fsb_control]
-    bringup --> nav[fsb_navigation]
-    bringup --> patrol[fsb_patrol]
-    gz -- "/scan /imu /camera /clock" --> ctrl
-    ctrl -- "EKF: odom→base_footprint" --> nav
-    nav -- "NavigateToPose" --> patrol
-    bringup --> perc[fsb_perception]
-    gz -- "/camera/image_raw" --> perc
-    perc -- "/security/alerts" --> patrol
+    gz["Gazebo Harmonic<br/>(fsb_gazebo)"] -- "/scan /imu /camera /clock<br/>(ros_gz_bridge)" --> stack
+    subgraph stack[" "]
+        ctrl["ros2_control<br/>diff_drive_controller"] --> ekf["EKF<br/>odom→base_footprint"]
+        ekf --> loc["SLAM Toolbox / AMCL<br/>map→odom"]
+        loc --> nav["Nav2"]
+    end
+    planner["patrol_planner"] -- "waypoints.yaml" --> exec["patrol_executor"]
+    exec -- "NavigateToPose" --> nav
+    nav -- "/cmd_vel" --> ctrl
+    gz -- "/camera/image_raw" --> yolo["yolo_node"]
+    yolo -- "/security/alerts" --> exec
+    exec -- "/security/keepout" --> nav
 ```
 
-### TF ağacı
-Her dönüşümün tek bir sahibi vardır: `map→odom` SLAM Toolbox **veya** AMCL, `odom→base_footprint`
-yalnızca EKF.
+Same stack in simulation and on the real robot; only the ros2_control hardware plugin changes
+(`gz_ros2_control/GazeboSimSystem` ↔ `fsb_hardware`, planned). Details, TF tree and command
+limits: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-```mermaid
-flowchart TD
-    map -->|"SLAM Toolbox / AMCL"| odom
-    odom -->|EKF| base_footprint
-    base_footprint --> base_link
-    base_link --> lidar_link["lidar_link (yaw 180°)"]
-    base_link --> camera_link --> camera_optical_link
-    base_link --> imu_link
-    base_link --> left_wheel_link
-    base_link --> right_wheel_link
-    base_link --> caster_link
-```
+## Results (simulation)
 
----
+Gazebo Harmonic, 20 × 14 m factory world, WSL2, 16-core CPU, NVIDIA GPU. Patrol rows were measured
+at 0.22 m/s before the limit was lowered to 0.2 m/s (re-check at 0.2 m/s in
+[`docs/TESTING.md`](docs/TESTING.md)).
 
-## Kurulum
+| Area | Metric | Result | Sample / conditions |
+|---|---|---|---|
+| Real-time factor | RTF during patrol | 0.951 (no perception) · 0.944 (YOLOv8n-pose) · 0.910 (pose + compressed images + watchdog) | 240 s each |
+| Odometry | 1 m forward / ±360° turn | 1.0260 m odom = 1.0260 m true; −0.003° / +0.002° | single runs |
+| EKF drift | Closed-loop error after random driving | 0.18 cm / +0.11° and 1.08 cm / −0.26° | 2 × 5 min, ~44 m, ~3000° turned |
+| Map quality | SLAM map vs. world geometry | median 2.2 cm, p95 5.5 cm, 99.96 % of cells ≤ 10 cm, no double walls | 1 map |
+| Localisation | AMCL from a wrong initial pose | +60 cm / 16.5° → 1.2 cm / 0.5° in 7 sim-s | 1 run |
+| Planning | Waypoints / planned coverage | 29 waypoints, 95.02 %, 12/12 corridors | factory map + 6 synthetic variants (95.02–95.65 %) |
+| Patrol | Idleness patrol | 5/5 loops, 156 visits, 0 skipped, 0 collisions, min clearance 10.5 cm | 5 loops, ~734 m |
+| Coverage | Seen along the driven path | 99.95 % (narrow areas 99.94 %) | same 5 loops |
+| Detection | Lying people found | 12/12, 1 duplicate entry | 4 worlds × 3 people, 1 loop each |
+| Detection | False alerts in negative world | 0 alerts (0 "lying" decisions in 471 frames containing a person) | 1 full loop, 4525 inferences |
+| Detection | Single-frame "lying" decision | 55 % at 4.7 cm camera height, 67 % at 60 cm | 2464 frames, 4 Fuel models |
 
-Hedef ortam: Ubuntu 24.04 (WSL2 üzerinde test edildi), ROS 2 Jazzy, Gazebo Harmonic (gz-sim 8).
+**Limitations:** simulation only; four Fuel human models instead of real people; small sample
+sizes for the incident pipeline; the camera is 4.7 cm above the floor (Andino geometry), which
+limits single-frame posture accuracy. Each document lists its own limitations.
 
-```bash
-sudo apt update
-sudo apt install -y \
-  ros-jazzy-ros-gz ros-jazzy-gz-ros2-control \
-  ros-jazzy-ros2-control ros-jazzy-ros2-controllers \
-  ros-jazzy-navigation2 ros-jazzy-nav2-bringup \
-  ros-jazzy-slam-toolbox ros-jazzy-robot-localization \
-  ros-jazzy-xacro ros-jazzy-joint-state-publisher-gui \
-  ros-jazzy-teleop-twist-keyboard liburdfdom-tools \
-  python3-numpy python3-scipy python3-yaml python3-matplotlib \
-  ros-jazzy-vision-msgs ros-jazzy-cv-bridge python3-opencv python3-pil python3-psutil
-```
+![Coverage measured from the driven path](docs/images/coverage_real.png)
 
-YOLOv8 algısı (isteğe bağlı, `perception:=true`) için ayrıca `~/fsb_venv` sanal ortamı ve
-`~/yolov8n.pt` gerekir: [`src/fsb_perception/README.md`](src/fsb_perception/README.md).
+## Install
 
-Depoyu klonlayıp derleyin (`--symlink-install` **kullanılmaz**):
+Ubuntu 24.04 (tested on WSL2) with [ROS 2 Jazzy](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) installed.
 
 ```bash
 git clone https://github.com/sinann-emree/factory_security_bot_ws.git ~/factory_security_bot_ws
 cd ~/factory_security_bot_ws
+scripts/install_deps.sh          # apt + rosdep (Nav2, SLAM Toolbox, ros_gz, Gazebo Harmonic, ...); uses sudo
 source /opt/ros/jazzy/setup.bash
-rosdep install --from-paths src --ignore-src -y   # isteğe bağlı: eksik bağımlılıkları tamamlar
-colcon build
+colcon build                     # --symlink-install is not used in this project
 source install/setup.bash
-```
-
-Testler:
-```bash
 colcon test && colcon test-result --verbose
 ```
 
----
+`scripts/install_deps.sh --check` only verifies dependencies (no sudo). Side effects of the
+install mode: system apt packages, `rosdep init` (`/etc/ros/rosdep/`) on first use, rosdep cache in
+`~/.ros/rosdep/`.
 
-## Çalıştırma
+**Perception (optional, `perception:=true`):**
+```bash
+scripts/setup_perception_venv.sh   # ~/fsb_venv + ~/yolov8n-pose.pt
+# CPU-only torch: TORCH_INDEX=https://download.pytorch.org/whl/cpu scripts/setup_perception_venv.sh
+```
+Side effects: creates `~/fsb_venv` (`--system-site-packages`), downloads torch (several GB with
+CUDA), torchvision and Ultralytics from PyPI, removes `setuptools` from the venv (incompatible with
+colcon), downloads `yolov8n-pose.pt` (~6.8 MB). It does not touch `~/.local` or system Python.
+Model weights are **not** in this repository. Gazebo downloads the Fuel human models to
+`~/.gz/fuel` on first start (internet required once).
 
-Tüm sistem tek launch dosyasından başlar; `use_sim` (varsayılan `true`) `use_sim_time`'ı tüm
-düğümlere iletir.
+## Run
 
 ```bash
-# Gazebo + controller'lar + EKF
+# Simulation + controllers + EKF
 ros2 launch fsb_bringup bringup.launch.py
 
-# Haritalama (SLAM Toolbox)
+# Mapping with SLAM Toolbox
 ros2 launch fsb_bringup bringup.launch.py localization:=slam rviz:=true
 
-# AMCL + Nav2 + 5 turluk idleness devriyesi (tek komut)
+# AMCL + Nav2 + 5-loop idleness patrol
 ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true loops:=5
 
-# Devriye + yerde yatan insan tespiti ve olay listesi (~/fsb_venv gerekir, bkz. src/fsb_perception/README.md)
+# Patrol + lying-person detection and incident list
 ros2 launch fsb_bringup bringup.launch.py localization:=amcl rviz:=true patrol:=true perception:=true \
     world:=$(ros2 pkg prefix fsb_gazebo)/share/fsb_gazebo/worlds/factory_lying.sdf
+
+# Regenerate waypoints after a map change
+ros2 run fsb_patrol patrol_planner --map src/fsb_navigation/maps/factory.yaml \
+    --out src/fsb_patrol/config/waypoints_factory.yaml
 ```
 
-Sık kullanılan argümanlar: `headless:=true` (yalnızca gz sunucusu), `patrol_mode:=idleness|sequential|random|legacy`,
-`coverage:=true`, `map:=<harita.yaml>`. Ayrıntılar: [`src/fsb_bringup/README.md`](src/fsb_bringup/README.md).
+Useful arguments: `headless:=true`, `patrol_mode:=idleness|sequential|random`, `coverage:=true`,
+`image_transport:=compressed`, `cmd_vel_watchdog:=true`. Incident files are written to
+`~/.ros/fsb_security/` (outside the repository). WSL2: if windows do not open, try
+`export LIBGL_ALWAYS_SOFTWARE=1` or `headless:=true`.
 
-Harita değişince waypoint'leri yeniden üretmek için: [`src/fsb_patrol/README.md`](src/fsb_patrol/README.md).
+## Status
 
-> **WSL2 notu:** Gazebo GUI + RViz pencereleri açılmazsa `export LIBGL_ALWAYS_SOFTWARE=1` deneyin
-> veya `headless:=true` ile yalnızca RViz'den izleyin.
+| Done (simulation) | Planned / not yet available |
+|---|---|
+| Robot model, ros2_control, Gazebo integration | **Real hardware:** `fsb_hardware` interface for the Andino firmware, calibration, sensor drivers (stage 7) |
+| Sensors + EKF | **Mission / task manager** (schedules, zones, operator commands) |
+| SLAM Toolbox, AMCL, Nav2 | **Remote notifications** (e.g. Telegram or similar) — alerts are currently logged, shown in RViz and saved to disk |
+| Map-based patrol planning and idleness patrol | Real-world validation of perception (real people, lighting, higher camera mount) |
+| YOLOv8-pose lying-person detection, incident list, revisit | |
+| Off-board perception with compressed images, `cmd_vel_watchdog` | |
+
+## Documentation
+
+| Document | Content |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Packages, data flow, TF ownership, command limits |
+| [`docs/PATROL_PLANNER.md`](docs/PATROL_PLANNER.md) | Planner pipeline, executor, incident handling, results |
+| [`docs/PERCEPTION.md`](docs/PERCEPTION.md) | YOLOv8-pose node, posture rules, detection results |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test levels, commands, expected and measured values |
+| [`docs/HARDWARE.md`](docs/HARDWARE.md) | Intended parts, speed/RPM/torque calculations, motor plans |
+| [`docs/firmware.md`](docs/firmware.md) | Andino firmware as an external dependency (Turkish) |
+| [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) | Third-party components and licences |
+| `src/*/README.md` | Per-package launch commands and parameters (Turkish) |
+
+## License
+
+Apache-2.0 ([`LICENSE`](LICENSE)). The optional perception node uses **Ultralytics YOLO
+(AGPL-3.0)** at runtime; it is not included here, but a system distributed or offered as a service
+together with it falls under AGPL-3.0 or needs Ultralytics' commercial licence. See
+[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
+
+**Author:** Sinan Emre Gülşen — [@sinann-emree](https://github.com/sinann-emree)
 
 ---
 
-## Durum
+## Türkçe özet
 
-| Aşama | Kapsam | Durum |
-|---|---|---|
-| 0 | Ortam hazırlığı (ROS 2 Jazzy, Gazebo Harmonic) | ✅ Tamamlandı |
-| 1 | Paket iskeletleri (7 `fsb_*` paketi) | ✅ Tamamlandı |
-| 2 | URDF/xacro ve ros2_control | ✅ Tamamlandı |
-| 3 | Gazebo entegrasyonu, köprü, controller'lar | ✅ Tamamlandı |
-| 4 | Sensörler (LiDAR, kamera, IMU) ve EKF | ✅ Tamamlandı |
-| 5 | SLAM Toolbox, AMCL, Nav2, waypoint devriyesi | ✅ Tamamlandı |
-| 5b | Haritadan otomatik kapsamlı devriye | ✅ Tamamlandı |
-| 6 | YOLOv8 ile insan tespiti, `/security/alerts`, devriye tepkisi | ✅ Tamamlandı |
-| 6b | Yerde yatan insan: duruş sınıflandırma, harita konumu, olay listesi, revisit | ✅ Tamamlandı |
-| 7 | Gerçek robota geçiş (`fsb_hardware`, `use_sim:=false`, kalibrasyon) | 🗓️ **Planlanıyor** |
+ROS 2 Jazzy ve Gazebo Harmonic üzerinde, fabrika zemininde otonom devriye gezen bir güvenlik robotu.
+Diferansiyel sürüşlü robot (Andino ölçüleri), 360° LiDAR, kamera ve IMU taşır. Simülasyon ve gerçek
+robot aynı yazılım yığınını kullanır; yalnızca ros2_control donanım eklentisi değişir.
 
+- Devriye noktaları haritadan otomatik üretilir (medial axis, greedy set cover, TSP); fabrika
+  haritasında 29 nokta ve %95 planlı kapsama.
+- Idleness tabanlı devriye: 5 turda 0 atlama, 0 çarpışma; gerçek yoldan kapsama %99.95.
+- YOLOv8-pose ile yalnızca **yerde yatan insan** için alarm; kişi LiDAR ile haritada konumlanır,
+  3 açıdan kaydedilir ve sonra yeniden kontrol edilir. 4 dünyada 12/12 kişi bulundu; negatif
+  testte 0 alarm.
+- Tüm sonuçlar simülasyondur. Gerçek donanım, görev yöneticisi ve uzaktan bildirim henüz yoktur.
 
----
-
-## Atıflar
-
-- [Andino (Ekumen-OS/andino)](https://github.com/Ekumen-OS/andino) — yalnızca robot **ölçüleri ve
-  fiziksel parametreler** için referans olarak kullanılmıştır (commit `974264b`). Andino deposundan
-  hiçbir dosya kopyalanmamıştır; tüm `fsb_*` paketleri sıfırdan yazılmıştır ve kullanılan her değerin
-  kaynağı ilgili dosyada yorum satırıyla belirtilmiştir.
-- ROS 2, Gazebo, ros2_control, Nav2, SLAM Toolbox ve robot_localization topluluklarına teşekkürler.
-
-## Yazar
-
-**Sinan Emre Gülşen** — GitHub: [@sinann-emree](https://github.com/sinann-emree)
-
-## Lisans
-
-Bu proje [Apache License 2.0](LICENSE) ile lisanslanmıştır.
+Kurulum ve çalıştırma komutları yukarıdadır; paket README'leri Türkçedir.
