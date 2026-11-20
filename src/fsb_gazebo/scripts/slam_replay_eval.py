@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-SLAM çevrimdışı değerlendirme: bag oynatılırken SLAM'in map→base_footprint tahminini /gt_pose
+SLAM çevrimdışı değerlendirme.
+
+Bag oynatılırken SLAM'in map→base_footprint tahminini /gt_pose
 (gt_pose_publisher.py ile kaydedilmiş gerçek konum) ile karşılaştırır.
 
 Varsayım: map = dünya çerçevesi (robot (0,0,0)'da spawn, SLAM oradan başlar).

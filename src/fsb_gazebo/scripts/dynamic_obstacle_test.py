@@ -4,8 +4,9 @@ Dinamik engel testi (Aşama 5 çıkış kriteri).
 
 1) NavigateToPose ile robot A=(-4.5, 0, 0°)'a götürülür.
 2) B=(4.5, 0, 0°) hedefi gönderilir. Robot x > --trigger-x geçince, rotası üzerine
-   (haritada olmayan) bir kutu Gazebo'da spawn edilir (/world/<world>/create). Kutu dinamiktir (kütleli): çarpışma
-   olursa yerinden oynar → kutu yer değiştirmesi çarpışma kanıtıdır.
+   (haritada olmayan) bir kutu Gazebo'da spawn edilir (/world/<world>/create).
+   Kutu dinamiktir (kütleli): çarpışma olursa yerinden oynar → kutu yer değiştirmesi
+   çarpışma kanıtıdır.
 3) Ölçülen: hedef sonucu, robot ayak izi (footprint) ile kutu arasındaki minimum açıklık,
    en büyük yanal sapma, kutu yer değiştirmesi, süre. Sonda kutu silinir (/world/<world>/remove).
 Kullanım (bringup localization:=amcl çalışırken, devriye kapalıyken):

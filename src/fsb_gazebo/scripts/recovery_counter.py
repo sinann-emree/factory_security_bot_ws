@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-#!/usr/bin/env python3
 """
-Nav2 kurtarma davranışı sayacı: behavior_server action'larının (spin, backup, drive_on_heading,
-wait, assisted_teleop) `_action/status` topic'lerini dinler; her benzersiz goal_id bir çağrıdır.
+Nav2 kurtarma davranışı sayacı.
+
+behavior_server action'larının (spin, backup, drive_on_heading, wait, assisted_teleop)
+`_action/status` topic'lerini dinler; her benzersiz goal_id bir çağrıdır.
 
 Her çağrıda `KURTARMA: <ad>` uyarısı; SIGINT/SIGTERM'de `KURTARMA ÖZETİ` basar.
 Not: costmap temizleme (ClearCostmap servisleri) action olmadığı için sayılmaz.

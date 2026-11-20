@@ -155,7 +155,8 @@ class Monitor(Node):
         ex, ey = np.array(self.err_xy), np.array(self.err_yaw)
         dur = self.get_clock().now().nanoseconds * 1e-9 - self.t_start
         log.info(f'--- {title}: {dur:.0f} sim-s, {len(ex)} örnek, yol {self.path:.1f} m ---')
-        log.info(f'map→odom ham adım: maks Δxy={sx.max() * 100:.2f} cm  maks Δyaw={sy.max():.2f}°  '
+        log.info(f'map→odom ham adım: maks Δxy={sx.max() * 100:.2f} cm  '
+                 f'maks Δyaw={sy.max():.2f}°  '
                  f'p99 Δxy={np.percentile(sx, 99) * 100:.2f} cm')
         log.info(f'POZ SIÇRAMASI (robot noktasında): maks={pj.max() * 100:.2f} cm  '
                  f'p99={np.percentile(pj, 99) * 100:.2f} cm  '

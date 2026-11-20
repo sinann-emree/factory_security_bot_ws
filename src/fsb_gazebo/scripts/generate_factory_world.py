@@ -38,10 +38,12 @@ def box(name: str, x: float, y: float, z: float,
       <static>true</static>
       <pose>{x} {y} {z} 0 0 0</pose>
       <link name="link">
-        <collision name="collision"><geometry><box><size>{sx} {sy} {sz}</size></box></geometry></collision>
+        <collision name="collision"><geometry><box><size>{sx} {sy} {sz}</size></box>\
+</geometry></collision>
         <visual name="visual">
           <geometry><box><size>{sx} {sy} {sz}</size></box></geometry>
-          <material><ambient>{r} {g} {b} 1</ambient><diffuse>{r} {g} {b} 1</diffuse><specular>0.1 0.1 0.1 1</specular></material>
+          <material><ambient>{r} {g} {b} 1</ambient><diffuse>{r} {g} {b} 1</diffuse>\
+<specular>0.1 0.1 0.1 1</specular></material>
         </visual>
       </link>
     </model>"""
@@ -131,8 +133,10 @@ def world_sdf(extra: str = '') -> str:
     return f"""<?xml version="1.0"?>
 <!--
   factory.sdf — Fabrika temalı basit dünya (Gazebo Harmonic / gz-sim 8)
-  Salon: 20 m x 14 m, duvar 3 m. Ana koridor: |y| < 2.6 m boyunca boş (robot başlangıcı 0,0).
-  Raf sıraları y = ±3.0 ve ±5.5; ara koridorlar x ∈ [-4,-2] ve [2,4]; kolonlar; doğu ucunda paletler.
+  Salon: 20 m x 14 m, duvar 3 m. Ana koridor: |y| < 2.6 m boyunca boş \
+(robot başlangıcı 0,0).
+  Raf sıraları y = ±3.0 ve ±5.5; ara koridorlar x ∈ [-4,-2] ve [2,4]; kolonlar; \
+doğu ucunda paletler.
   Üretici: fsb_gazebo/scripts/generate_factory_world.py; elle düzenlenebilir.
   Sistem eklentileri: Physics, UserCommands (ros_gz_sim create için gerekli), SceneBroadcaster,
   Sensors (gpu_lidar + kamera, ogre2), Imu (Aşama 4).
@@ -176,7 +180,8 @@ def world_sdf(extra: str = '') -> str:
         </collision>
         <visual name="visual">
           <geometry><plane><normal>0 0 1</normal><size>40 30</size></plane></geometry>
-          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse><specular>0.05 0.05 0.05 1</specular></material>
+          <material><ambient>0.35 0.35 0.35 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse>\
+<specular>0.05 0.05 0.05 1</specular></material>
         </visual>
       </link>
     </model>

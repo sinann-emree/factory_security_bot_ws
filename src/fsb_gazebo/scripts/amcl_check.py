@@ -84,7 +84,8 @@ class AmclCheck(Node):
             if ps.name == self.model:
                 self.gt = (ps.position.x, ps.position.y, yaw_of(ps.orientation))
                 with self._gt_lock:
-                    self._gt_hist.append((m.header.stamp.sec + m.header.stamp.nsec * 1e-9, self.gt))
+                    self._gt_hist.append(
+                        (m.header.stamp.sec + m.header.stamp.nsec * 1e-9, self.gt))
 
     def gt_at(self, t: float) -> Pose2D:
         """Döndür: t sim-zamanına en yakın gerçek poz (AMCL tahmini o ana aittir)."""

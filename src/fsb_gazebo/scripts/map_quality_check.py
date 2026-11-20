@@ -22,13 +22,13 @@ import math
 import os
 import sys
 from typing import List, Tuple
+import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
 import numpy as np
 import rclpy
 import rclpy.logging
 import rclpy.utilities
-import xml.etree.ElementTree as ET
 import yaml
 
 Rect = Tuple[str, float, float, float, float]

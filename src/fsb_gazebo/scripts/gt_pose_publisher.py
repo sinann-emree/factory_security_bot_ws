@@ -2,7 +2,8 @@
 """
 Gazebo gerçek konumunu /gt_pose (nav_msgs/Odometry, sim zamanı, frame 'world') olarak yayınlar.
 
-YALNIZCA rosbag kaydı için (SLAM parametrelerini çevrimdışı değerlendirmek, bkz. slam_replay_eval.py).
+YALNIZCA rosbag kaydı için (SLAM parametrelerini çevrimdışı değerlendirmek,
+bkz. slam_replay_eval.py).
 Navigasyon yığını bu topic'i kullanmaz; köprüye ground truth eklenmez. Gerçek konum doğrudan
 gz-transport `/world/<world>/dynamic_pose/info`'dan okunur.
 
