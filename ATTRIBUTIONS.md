@@ -78,10 +78,10 @@ contains nor links their code.
 | Version tested | 8.4.201 |
 | Model weights | `yolov8n-pose.pt` (Ultralytics, same terms); **not** in this repository, downloaded by the setup script |
 
-`fsb_perception` does not contain Ultralytics code; it only imports it at runtime, so the source in
-this repository stays Apache-2.0. A system that is **distributed or offered as a network service**
-together with `fsb_perception` is subject to AGPL-3.0 obligations (e.g. providing source code) or
-needs Ultralytics' commercial licence.
+`fsb_perception` does not contain Ultralytics code; it only imports it at runtime, and Ultralytics is
+not included in this repository. If you plan to distribute a system with this component or offer it
+as a network service, review the current licence terms (AGPL-3.0 or a commercial licence) yourself.
+This note is not legal advice.
 
 ## Gazebo Fuel models
 

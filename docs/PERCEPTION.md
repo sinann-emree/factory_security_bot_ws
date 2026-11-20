@@ -66,5 +66,7 @@ Casual female 57 %, Rescue Randy 68 %. The system relies on accumulating frames 
 - The simulated camera sits 4.7 cm above the floor (Andino geometry); a mounting height of
   ≥ 30–60 cm is recommended for the real robot (`docs/HARDWARE.md`).
 - Rules are hand-tuned thresholds, not a trained posture classifier.
-- Ultralytics is AGPL-3.0: a system distributed or offered as a network service together with this
-  node falls under AGPL obligations or requires a commercial licence (`ATTRIBUTIONS.md`).
+- Ultralytics is licensed under AGPL-3.0 and is not included in this repository. If you plan to
+  distribute a system with this node or offer it as a network service, review the current licence
+  terms (AGPL-3.0 or a commercial licence) yourself; this note is not legal advice
+  (`ATTRIBUTIONS.md`).
