@@ -3,7 +3,7 @@ build/
 install/
 log/
 
-# Yerel yedekler ve geliştirme ortamı dosyaları (yayınlanmaz)
+# Yerel yedekler
 .backups/
 
 # Python
@@ -34,7 +34,6 @@ fsb_security/
 !docs/images/*.png
 !src/fsb_navigation/maps/*.png
 !src/fsb_navigation/maps/*.pgm
-
 
 # Demo medyası (README'de kullanılır)
 !media/*.png
