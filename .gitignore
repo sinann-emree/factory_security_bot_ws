@@ -1,17 +1,36 @@
+# colcon çıktıları
 build/
 install/
 log/
+
+# Yerel yedekler ve geliştirme ortamı dosyaları (yayınlanmaz)
 .backups/
+
+# Python
 __pycache__/
 *.pyc
-# Harita kontrol görselleri (factory.png, factory_check.png ...) depoya girmez
-factory*.png
+.pytest_cache/
+.venv/
+fsb_venv/
+
+# Model ağırlıkları (indirme adımı: scripts/setup_perception_venv.sh)
+*.pt
+*.onnx
+*.engine
+
+# Kayıtlar: rosbag, alarm görüntüleri, ROS log'ları
 *.bag
 *.db3
 *.mcap
-*.pt
-*.onnx
-.venv/
-__pycache__/
-*.pyc
-factory*.png
+rosbag2_*/
+.ros/
+fsb_security/
+
+# Üretilen görseller (harita kontrolü, kapsama, waypoint çizimleri).
+# İstisna: dokümantasyon görselleri ve haritalar.
+*.png
+*.jpg
+*.jpeg
+!docs/images/*.png
+!src/fsb_navigation/maps/*.png
+!src/fsb_navigation/maps/*.pgm
