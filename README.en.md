@@ -12,8 +12,6 @@ route from the map, and raises an alert when it finds a **person lying on the fl
 runs in simulation today; the control stack is built so that the real robot (Andino-class
 hardware, planned) uses the same software with a different ros2_control hardware plugin.
 
-<!-- Demo: replace with a recording, e.g. media/demo.gif (patrol in RViz + Gazebo) -->
-> **Demo:** _video/GIF placeholder — `media/demo.gif` (to be recorded)._
 
 ![Patrol waypoints generated from the map](docs/images/waypoints_factory.png)
 

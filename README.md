@@ -12,8 +12,6 @@ Fabrika zemininde kendi başına devriye gezen, devriye rotasını haritadan ken
 her şey simülasyonda çalışıyor. Yazılım, ileride kurulacak gerçek robotun (Andino sınıfı donanım)
 aynı yığını yalnızca farklı bir ros2_control donanım eklentisiyle kullanabileceği şekilde kuruldu.
 
-<!-- Demo: kayıt hazır olunca media/demo.gif ile değiştirin (RViz + Gazebo'da devriye) -->
-> **Demo:** _video/GIF yeri — `media/demo.gif` (kaydedilecek)._
 
 ![Haritadan otomatik üretilen devriye noktaları](docs/images/waypoints_factory.png)
 
